@@ -1,0 +1,738 @@
+[
+  {
+    "name": "2026-03-17_LoRA_TTT",
+    "path": "records/track_10min_16mb/2026-03-17_LoRA_TTT",
+    "sha": "1869a72a6721baa03517e70ddc0db9b34a5f69cf",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-17_LoRA_TTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-17_LoRA_TTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/1869a72a6721baa03517e70ddc0db9b34a5f69cf",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-17_LoRA_TTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/1869a72a6721baa03517e70ddc0db9b34a5f69cf",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-17_LoRA_TTT"
+    }
+  },
+  {
+    "name": "2026-03-17_NaiveBaseline",
+    "path": "records/track_10min_16mb/2026-03-17_NaiveBaseline",
+    "sha": "9b7887dcfcbf5acd792fb5e701ea56481604eb26",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-17_NaiveBaseline?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-17_NaiveBaseline",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/9b7887dcfcbf5acd792fb5e701ea56481604eb26",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-17_NaiveBaseline?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/9b7887dcfcbf5acd792fb5e701ea56481604eb26",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-17_NaiveBaseline"
+    }
+  },
+  {
+    "name": "2026-03-18_FP16Embed_WD3600",
+    "path": "records/track_10min_16mb/2026-03-18_FP16Embed_WD3600",
+    "sha": "3e992487cd2a1eb2d13510d3d794138a92e25377",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_FP16Embed_WD3600?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_FP16Embed_WD3600",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/3e992487cd2a1eb2d13510d3d794138a92e25377",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_FP16Embed_WD3600?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/3e992487cd2a1eb2d13510d3d794138a92e25377",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_FP16Embed_WD3600"
+    }
+  },
+  {
+    "name": "2026-03-18_LongContextSeq2048",
+    "path": "records/track_10min_16mb/2026-03-18_LongContextSeq2048",
+    "sha": "fd2df89a9bf6dccd772c44ac007df60d217b2460",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_LongContextSeq2048?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_LongContextSeq2048",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/fd2df89a9bf6dccd772c44ac007df60d217b2460",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_LongContextSeq2048?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/fd2df89a9bf6dccd772c44ac007df60d217b2460",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_LongContextSeq2048"
+    }
+  },
+  {
+    "name": "2026-03-18_LowerLR",
+    "path": "records/track_10min_16mb/2026-03-18_LowerLR",
+    "sha": "7a6f0e90bad99857ffa0d330144283982dd8d162",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_LowerLR?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_LowerLR",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/7a6f0e90bad99857ffa0d330144283982dd8d162",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-18_LowerLR?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/7a6f0e90bad99857ffa0d330144283982dd8d162",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-18_LowerLR"
+    }
+  },
+  {
+    "name": "2026-03-19_10L_MixedPrecision",
+    "path": "records/track_10min_16mb/2026-03-19_10L_MixedPrecision",
+    "sha": "652735c753e692d94b97e6e2d94151568c762694",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_10L_MixedPrecision?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_10L_MixedPrecision",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/652735c753e692d94b97e6e2d94151568c762694",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_10L_MixedPrecision?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/652735c753e692d94b97e6e2d94151568c762694",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_10L_MixedPrecision"
+    }
+  },
+  {
+    "name": "2026-03-19_MLP3x_QAT_Int6_SlidingWindow",
+    "path": "records/track_10min_16mb/2026-03-19_MLP3x_QAT_Int6_SlidingWindow",
+    "sha": "27b1b436e03b67dbdcf58e7aad08f0d386f25aee",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_MLP3x_QAT_Int6_SlidingWindow?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_MLP3x_QAT_Int6_SlidingWindow",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/27b1b436e03b67dbdcf58e7aad08f0d386f25aee",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_MLP3x_QAT_Int6_SlidingWindow?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/27b1b436e03b67dbdcf58e7aad08f0d386f25aee",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_MLP3x_QAT_Int6_SlidingWindow"
+    }
+  },
+  {
+    "name": "2026-03-19_MixedQuant_Int6Int8_SlidingWindow",
+    "path": "records/track_10min_16mb/2026-03-19_MixedQuant_Int6Int8_SlidingWindow",
+    "sha": "952d28bd7320d5ceb9b0238338d4789cd8e0261c",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_MixedQuant_Int6Int8_SlidingWindow?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_MixedQuant_Int6Int8_SlidingWindow",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/952d28bd7320d5ceb9b0238338d4789cd8e0261c",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_MixedQuant_Int6Int8_SlidingWindow?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/952d28bd7320d5ceb9b0238338d4789cd8e0261c",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_MixedQuant_Int6Int8_SlidingWindow"
+    }
+  },
+  {
+    "name": "2026-03-19_Seq2048_FP16Emb_TunedLR",
+    "path": "records/track_10min_16mb/2026-03-19_Seq2048_FP16Emb_TunedLR",
+    "sha": "bb9aa6686f93d5af34a1d5bb956f700823094632",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_Seq2048_FP16Emb_TunedLR?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_Seq2048_FP16Emb_TunedLR",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/bb9aa6686f93d5af34a1d5bb956f700823094632",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_Seq2048_FP16Emb_TunedLR?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/bb9aa6686f93d5af34a1d5bb956f700823094632",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_Seq2048_FP16Emb_TunedLR"
+    }
+  },
+  {
+    "name": "2026-03-19_SlidingWindowEval",
+    "path": "records/track_10min_16mb/2026-03-19_SlidingWindowEval",
+    "sha": "addfd7fe8d07465839bb8686808b6347860e8e5a",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_SlidingWindowEval?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_SlidingWindowEval",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/addfd7fe8d07465839bb8686808b6347860e8e5a",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_SlidingWindowEval?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/addfd7fe8d07465839bb8686808b6347860e8e5a",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_SlidingWindowEval"
+    }
+  },
+  {
+    "name": "2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit",
+    "path": "records/track_10min_16mb/2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit",
+    "sha": "25c2c7a1b8e3ee853d955d95fbae4ce38f8a7612",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/25c2c7a1b8e3ee853d955d95fbae4ce38f8a7612",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/25c2c7a1b8e3ee853d955d95fbae4ce38f8a7612",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_SlidingWindow_FP16Emb_10L_MuonWD_OvertoneInit"
+    }
+  },
+  {
+    "name": "2026-03-19_TrainingOptSeq4096",
+    "path": "records/track_10min_16mb/2026-03-19_TrainingOptSeq4096",
+    "sha": "c5b42a23a453882dd0675a3c9a8b40cd5235f8b0",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_TrainingOptSeq4096?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_TrainingOptSeq4096",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/c5b42a23a453882dd0675a3c9a8b40cd5235f8b0",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_TrainingOptSeq4096?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/c5b42a23a453882dd0675a3c9a8b40cd5235f8b0",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_TrainingOptSeq4096"
+    }
+  },
+  {
+    "name": "2026-03-19_WarmdownQuantization",
+    "path": "records/track_10min_16mb/2026-03-19_WarmdownQuantization",
+    "sha": "41bc34a9e0f24c073e1c315132c50a133d280c4e",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_WarmdownQuantization?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_WarmdownQuantization",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/41bc34a9e0f24c073e1c315132c50a133d280c4e",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_WarmdownQuantization?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/41bc34a9e0f24c073e1c315132c50a133d280c4e",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_WarmdownQuantization"
+    }
+  },
+  {
+    "name": "2026-03-19_int6_STE QAT_ MLP_bigram _U_Net",
+    "path": "records/track_10min_16mb/2026-03-19_int6_STE QAT_ MLP_bigram _U_Net",
+    "sha": "b2f1eeaa4c435493f0f71aa37860faadf349c588",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_int6_STE%20QAT_%20MLP_bigram%20_U_Net?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_int6_STE%20QAT_%20MLP_bigram%20_U_Net",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/b2f1eeaa4c435493f0f71aa37860faadf349c588",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_int6_STE%20QAT_%20MLP_bigram%20_U_Net?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/b2f1eeaa4c435493f0f71aa37860faadf349c588",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_int6_STE%20QAT_%20MLP_bigram%20_U_Net"
+    }
+  },
+  {
+    "name": "2026-03-19_smeargate_orthoinit_muonwd",
+    "path": "records/track_10min_16mb/2026-03-19_smeargate_orthoinit_muonwd",
+    "sha": "7626ea233cf988a025ce838cf491772662f404e0",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_smeargate_orthoinit_muonwd?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_smeargate_orthoinit_muonwd",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/7626ea233cf988a025ce838cf491772662f404e0",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-19_smeargate_orthoinit_muonwd?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/7626ea233cf988a025ce838cf491772662f404e0",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-19_smeargate_orthoinit_muonwd"
+    }
+  },
+  {
+    "name": "2026-03-20_10L_Int5MLP_MuonWD04_SWA50",
+    "path": "records/track_10min_16mb/2026-03-20_10L_Int5MLP_MuonWD04_SWA50",
+    "sha": "fe2404b7db51236f34ae3417a1a311b3a4fddc19",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_10L_Int5MLP_MuonWD04_SWA50?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_10L_Int5MLP_MuonWD04_SWA50",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/fe2404b7db51236f34ae3417a1a311b3a4fddc19",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_10L_Int5MLP_MuonWD04_SWA50?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/fe2404b7db51236f34ae3417a1a311b3a4fddc19",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_10L_Int5MLP_MuonWD04_SWA50"
+    }
+  },
+  {
+    "name": "2026-03-20_11L_EfficientPartialXSA_FA3_SWA120",
+    "path": "records/track_10min_16mb/2026-03-20_11L_EfficientPartialXSA_FA3_SWA120",
+    "sha": "74b1035c8ffbf798c16d9887eb09bfcc166b9103",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_11L_EfficientPartialXSA_FA3_SWA120?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_11L_EfficientPartialXSA_FA3_SWA120",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/74b1035c8ffbf798c16d9887eb09bfcc166b9103",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_11L_EfficientPartialXSA_FA3_SWA120?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/74b1035c8ffbf798c16d9887eb09bfcc166b9103",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_11L_EfficientPartialXSA_FA3_SWA120"
+    }
+  },
+  {
+    "name": "2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271",
+    "path": "records/track_10min_16mb/2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271",
+    "sha": "ab7324078c855d6ba2cc428b6840433a481aad7e",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/ab7324078c855d6ba2cc428b6840433a481aad7e",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/ab7324078c855d6ba2cc428b6840433a481aad7e",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04_1.1271"
+    }
+  },
+  {
+    "name": "2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA",
+    "path": "records/track_10min_16mb/2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA",
+    "sha": "59e5e59f1fb9c9096a06fcc7b7415bc1002b608b",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/59e5e59f1fb9c9096a06fcc7b7415bc1002b608b",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/59e5e59f1fb9c9096a06fcc7b7415bc1002b608b",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-20_Int6_MLP3x_SmearGate_BigramHash_MuonWD_SWA"
+    }
+  },
+  {
+    "name": "2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248",
+    "path": "records/track_10min_16mb/2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248",
+    "sha": "ed35b72bc1b9a91b720a638f0eac46a931ab1744",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/ed35b72bc1b9a91b720a638f0eac46a931ab1744",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/ed35b72bc1b9a91b720a638f0eac46a931ab1744",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT_1.1248"
+    }
+  },
+  {
+    "name": "2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233",
+    "path": "records/track_10min_16mb/2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233",
+    "sha": "25823543fe676fa6c8f15b2acf914bc7e55d90bf",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/25823543fe676fa6c8f15b2acf914bc7e55d90bf",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/25823543fe676fa6c8f15b2acf914bc7e55d90bf",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233"
+    }
+  },
+  {
+    "name": "2026-03-23_LeakyReLU_LegalTTT_ParallelMuon",
+    "path": "records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon",
+    "sha": "a866a6e21de802750b788a3044475d55a5a652d5",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/a866a6e21de802750b788a3044475d55a5a652d5",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/a866a6e21de802750b788a3044475d55a5a652d5",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon"
+    }
+  },
+  {
+    "name": "2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon",
+    "path": "records/track_10min_16mb/2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon",
+    "sha": "b25fd7a7750c841b1b86c7342059a7d02dffde51",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/b25fd7a7750c841b1b86c7342059a7d02dffde51",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/b25fd7a7750c841b1b86c7342059a7d02dffde51",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-24_74M_Ternary_UNet_FP8_10L_8192BPE_YaRN_NeoMuon"
+    }
+  },
+  {
+    "name": "2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072",
+    "path": "records/track_10min_16mb/2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072",
+    "sha": "d1a86a1b6c7f32852deb1c301ba312a966917c9f",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/d1a86a1b6c7f32852deb1c301ba312a966917c9f",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/d1a86a1b6c7f32852deb1c301ba312a966917c9f",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072"
+    }
+  },
+  {
+    "name": "2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816",
+    "path": "records/track_10min_16mb/2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816",
+    "sha": "ad94e37f488801d63104248be20b780ff83e1cab",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/ad94e37f488801d63104248be20b780ff83e1cab",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/ad94e37f488801d63104248be20b780ff83e1cab",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-29_Loader_FullGPTQ_XSA11_BigramHash2816"
+    }
+  },
+  {
+    "name": "2026-03-31_ParallelResiduals_MiniDepthRecurrence",
+    "path": "records/track_10min_16mb/2026-03-31_ParallelResiduals_MiniDepthRecurrence",
+    "sha": "20423b928465d3588718dff5eed8c25b8f8c014a",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-31_ParallelResiduals_MiniDepthRecurrence?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-31_ParallelResiduals_MiniDepthRecurrence",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/20423b928465d3588718dff5eed8c25b8f8c014a",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-03-31_ParallelResiduals_MiniDepthRecurrence?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/20423b928465d3588718dff5eed8c25b8f8c014a",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-03-31_ParallelResiduals_MiniDepthRecurrence"
+    }
+  },
+  {
+    "name": "2026-04-01_Vocab4096_MLPMult4_WD085",
+    "path": "records/track_10min_16mb/2026-04-01_Vocab4096_MLPMult4_WD085",
+    "sha": "4f3a8ac4d4b3e349b0af823b32a91026fd9f444f",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-01_Vocab4096_MLPMult4_WD085?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-01_Vocab4096_MLPMult4_WD085",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/4f3a8ac4d4b3e349b0af823b32a91026fd9f444f",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-01_Vocab4096_MLPMult4_WD085?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/4f3a8ac4d4b3e349b0af823b32a91026fd9f444f",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-01_Vocab4096_MLPMult4_WD085"
+    }
+  },
+  {
+    "name": "2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6",
+    "path": "records/track_10min_16mb/2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6",
+    "sha": "35a9e0ac20be59ea5c8a93bc66cf7d917971a471",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/35a9e0ac20be59ea5c8a93bc66cf7d917971a471",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/35a9e0ac20be59ea5c8a93bc66cf7d917971a471",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-03_MuonEqR_DepthRecurrence_WD090_AllInt6"
+    }
+  },
+  {
+    "name": "2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR",
+    "path": "records/track_10min_16mb/2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR",
+    "sha": "d9d7e7e06ed6b783cb3259e31b99d63bdb69865e",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/d9d7e7e06ed6b783cb3259e31b99d63bdb69865e",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/d9d7e7e06ed6b783cb3259e31b99d63bdb69865e",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-04_SP4096_DepthRecurrence_ParallelResid_MuonEqR"
+    }
+  },
+  {
+    "name": "2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2",
+    "path": "records/track_10min_16mb/2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2",
+    "sha": "4a6f31c79bf951779554de2971ee449cf9a547ce",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/4a6f31c79bf951779554de2971ee449cf9a547ce",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/4a6f31c79bf951779554de2971ee449cf9a547ce",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-05_SP8192_GPTQ-Embeddings_SDClip_Loop45x2"
+    }
+  },
+  {
+    "name": "2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence",
+    "path": "records/track_10min_16mb/2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence",
+    "sha": "1b165c77672f504b71690cc922591664c14ad04b",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/1b165c77672f504b71690cc922591664c14ad04b",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/1b165c77672f504b71690cc922591664c14ad04b",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-06_SP8192_HessianSDClip_ProgressiveRecurrence"
+    }
+  },
+  {
+    "name": "2026-04-06_SP8192_QK5_LegalTTT_1.0828",
+    "path": "records/track_10min_16mb/2026-04-06_SP8192_QK5_LegalTTT_1.0828",
+    "sha": "bf90d18ca17dd5ca74989804e32749468659f616",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-06_SP8192_QK5_LegalTTT_1.0828?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-06_SP8192_QK5_LegalTTT_1.0828",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/bf90d18ca17dd5ca74989804e32749468659f616",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-06_SP8192_QK5_LegalTTT_1.0828?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/bf90d18ca17dd5ca74989804e32749468659f616",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-06_SP8192_QK5_LegalTTT_1.0828"
+    }
+  },
+  {
+    "name": "2026-04-08_SP8192_ParallelResid_ScoreFirstTTT",
+    "path": "records/track_10min_16mb/2026-04-08_SP8192_ParallelResid_ScoreFirstTTT",
+    "sha": "dc3cfb408bb4485f67869ae2406a758d01e9c4ca",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-08_SP8192_ParallelResid_ScoreFirstTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-08_SP8192_ParallelResid_ScoreFirstTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/dc3cfb408bb4485f67869ae2406a758d01e9c4ca",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-08_SP8192_ParallelResid_ScoreFirstTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/dc3cfb408bb4485f67869ae2406a758d01e9c4ca",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-08_SP8192_ParallelResid_ScoreFirstTTT"
+    }
+  },
+  {
+    "name": "2026-04-09_A2_Muon097_3Seed",
+    "path": "records/track_10min_16mb/2026-04-09_A2_Muon097_3Seed",
+    "sha": "5dce58c0b9ad6a24c83455bb818ba616dcb772b0",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-09_A2_Muon097_3Seed?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-09_A2_Muon097_3Seed",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/5dce58c0b9ad6a24c83455bb818ba616dcb772b0",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-09_A2_Muon097_3Seed?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/5dce58c0b9ad6a24c83455bb818ba616dcb772b0",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-09_A2_Muon097_3Seed"
+    }
+  },
+  {
+    "name": "2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT",
+    "path": "records/track_10min_16mb/2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT",
+    "sha": "b88993174a4adee97e6a60773e1abbe19ad34c02",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/b88993174a4adee97e6a60773e1abbe19ad34c02",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/b88993174a4adee97e6a60773e1abbe19ad34c02",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-09_SP8192_3LayerRecur_ParResid_QK525_LegalTTT"
+    }
+  },
+  {
+    "name": "2026-04-10_VarLenAttn",
+    "path": "records/track_10min_16mb/2026-04-10_VarLenAttn",
+    "sha": "783140bab9c890d9d5b87e033fee7cda8ecad06a",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-10_VarLenAttn?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-10_VarLenAttn",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/783140bab9c890d9d5b87e033fee7cda8ecad06a",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-10_VarLenAttn?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/783140bab9c890d9d5b87e033fee7cda8ecad06a",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-10_VarLenAttn"
+    }
+  },
+  {
+    "name": "2026-04-13_VarLenAttn_PhasingTTT2000",
+    "path": "records/track_10min_16mb/2026-04-13_VarLenAttn_PhasingTTT2000",
+    "sha": "ee66a57d062081b52470ec299562fa6f84fe8288",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-13_VarLenAttn_PhasingTTT2000?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-13_VarLenAttn_PhasingTTT2000",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/ee66a57d062081b52470ec299562fa6f84fe8288",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-13_VarLenAttn_PhasingTTT2000?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/ee66a57d062081b52470ec299562fa6f84fe8288",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-13_VarLenAttn_PhasingTTT2000"
+    }
+  },
+  {
+    "name": "2026-04-14_MultiPhaseGlobalSGD_PhasedTTT",
+    "path": "records/track_10min_16mb/2026-04-14_MultiPhaseGlobalSGD_PhasedTTT",
+    "sha": "4dc0053f989a061a026958d8018d0057332b21d1",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-14_MultiPhaseGlobalSGD_PhasedTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-14_MultiPhaseGlobalSGD_PhasedTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/4dc0053f989a061a026958d8018d0057332b21d1",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-14_MultiPhaseGlobalSGD_PhasedTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/4dc0053f989a061a026958d8018d0057332b21d1",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-14_MultiPhaseGlobalSGD_PhasedTTT"
+    }
+  },
+  {
+    "name": "2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT",
+    "path": "records/track_10min_16mb/2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT",
+    "sha": "b5e934a4dae04e7aa5c3633bcac67c3ce68b31f9",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/b5e934a4dae04e7aa5c3633bcac67c3ce68b31f9",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/b5e934a4dae04e7aa5c3633bcac67c3ce68b31f9",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-16_SmearGate_AttentionOutputGate_ScoreFirstTTT"
+    }
+  },
+  {
+    "name": "2026-04-18_PR1626_CaseOps_Taper",
+    "path": "records/track_10min_16mb/2026-04-18_PR1626_CaseOps_Taper",
+    "sha": "5713a58dd77aceafc382e2adc0c23eead780ba5f",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-18_PR1626_CaseOps_Taper?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-18_PR1626_CaseOps_Taper",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/5713a58dd77aceafc382e2adc0c23eead780ba5f",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-18_PR1626_CaseOps_Taper?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/5713a58dd77aceafc382e2adc0c23eead780ba5f",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-18_PR1626_CaseOps_Taper"
+    }
+  },
+  {
+    "name": "2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT",
+    "path": "records/track_10min_16mb/2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT",
+    "sha": "3fcedcda13f59b80676214cd3dae7be971a5eb34",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/3fcedcda13f59b80676214cd3dae7be971a5eb34",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/3fcedcda13f59b80676214cd3dae7be971a5eb34",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-19_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT"
+    }
+  },
+  {
+    "name": "2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12",
+    "path": "records/track_10min_16mb/2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12",
+    "sha": "83c5a2642df2b1999719064a91a21408a3023e10",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/83c5a2642df2b1999719064a91a21408a3023e10",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/83c5a2642df2b1999719064a91a21408a3023e10",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-22_SP8192_CaseOps_GatedAttn_QuantGate_Loop45_PhasedTTT_MLPClip12"
+    }
+  },
+  {
+    "name": "2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE",
+    "path": "records/track_10min_16mb/2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE",
+    "sha": "38863a269c55ccdfbab928341bcb1f4a2e3c380b",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/38863a269c55ccdfbab928341bcb1f4a2e3c380b",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/38863a269c55ccdfbab928341bcb1f4a2e3c380b",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-23_SP8192_CaseOps_SparseGate_QuantGate_Loop45_PhasedTTT_PolarNS_MinLR_FusedCE"
+    }
+  },
+  {
+    "name": "2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611",
+    "path": "records/track_10min_16mb/2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611",
+    "sha": "683b1682a0f50bec7863f0739b478f986c0b162c",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/683b1682a0f50bec7863f0739b478f986c0b162c",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/683b1682a0f50bec7863f0739b478f986c0b162c",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-27_SP8192_LQER_SparseGate_BOSSmearFix_9HpStack_1.0611"
+    }
+  },
+  {
+    "name": "2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT",
+    "path": "records/track_10min_16mb/2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT",
+    "sha": "537d0ae51e8f3b37d042e997fcff56e6eda742d1",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/537d0ae51e8f3b37d042e997fcff56e6eda742d1",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/537d0ae51e8f3b37d042e997fcff56e6eda742d1",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-27_SmearGateBOSFix_PR1787Base_LQERAsym_PhasedTTT"
+    }
+  },
+  {
+    "name": "2026-04-29_SmearGateBOSFix_3Seed_1.06141",
+    "path": "records/track_10min_16mb/2026-04-29_SmearGateBOSFix_3Seed_1.06141",
+    "sha": "3a6c2b2169646b16362d1ad32566ea62cf2e14ea",
+    "size": 0,
+    "url": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-29_SmearGateBOSFix_3Seed_1.06141?ref=main",
+    "html_url": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-29_SmearGateBOSFix_3Seed_1.06141",
+    "git_url": "https://api.github.com/repos/openai/parameter-golf/git/trees/3a6c2b2169646b16362d1ad32566ea62cf2e14ea",
+    "download_url": null,
+    "type": "dir",
+    "_links": {
+      "self": "https://api.github.com/repos/openai/parameter-golf/contents/records/track_10min_16mb/2026-04-29_SmearGateBOSFix_3Seed_1.06141?ref=main",
+      "git": "https://api.github.com/repos/openai/parameter-golf/git/trees/3a6c2b2169646b16362d1ad32566ea62cf2e14ea",
+      "html": "https://github.com/openai/parameter-golf/tree/main/records/track_10min_16mb/2026-04-29_SmearGateBOSFix_3Seed_1.06141"
+    }
+  }
+]
