@@ -29,8 +29,8 @@ esac
 # =============================================================================
 # Default paths — override via env if your RunPod setup differs
 # =============================================================================
-: "${DATA_PATH:=${SCRIPT_DIR}/data/datasets/fineweb10B_sp1024}"
-: "${TOKENIZER_PATH:=${SCRIPT_DIR}/data/tokenizers/fineweb_1024_bpe.model}"
+export DATA_PATH="${DATA_PATH:-${SCRIPT_DIR}/data/datasets/fineweb10B_sp1024}"
+export TOKENIZER_PATH="${TOKENIZER_PATH:-${SCRIPT_DIR}/data/tokenizers/fineweb_1024_bpe.model}"
 : "${VOCAB_SIZE:=1024}"
 
 # Check data exists
