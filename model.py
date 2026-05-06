@@ -1,4 +1,5 @@
 import math
+import os
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
@@ -299,8 +300,11 @@ class GPT(nn.Module):
         print("[debug] GPT init: calling _init_weights...")
         self._init_weights()
 
-        print("[debug] GPT init: compiling block (mode=default)...")
-        self.block = torch.compile(self.block, mode="default")
+        if os.environ.get("DISABLE_COMPILE") == "1":
+            print("[debug] GPT init: torch.compile SKIPPED (DISABLE_COMPILE=1)")
+        else:
+            print("[debug] GPT init: compiling block (mode=default)...")
+            self.block = torch.compile(self.block, mode="default")
         print("[debug] GPT init: complete")
 
     def _init_weights(self) -> None:

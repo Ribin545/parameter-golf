@@ -14,12 +14,16 @@ cd "$SCRIPT_DIR"
 
 # Parse mode
 MODE="${1:-full}"
+CONFIG="${2:-}"
 case "$MODE" in
     --smoke|smoke)
         MODE="smoke"
         ;;
     --both|both)
         MODE="both"
+        ;;
+    --gate|--speed-gate|gate)
+        MODE="gate"
         ;;
     *)
         MODE="full"
@@ -162,6 +166,50 @@ python3 -c "import torch; print(f'PyTorch {torch.__version__}  |  CUDA available
     exit 1
 }
 echo ""
+
+# =============================================================================
+# Speed-gate mode — lean config for 75-iter AB tests
+# =============================================================================
+run_gate() {
+    local tag="${1:-lean}"
+    echo ""
+    echo "=========================================================================="
+    echo "  PHASE 1 GATE: $tag (75 iters, no compile)"
+    echo "=========================================================================="
+
+    # Override architecture for speed
+    if [ "$tag" = "512" ]; then
+        export MODEL_DIM=512
+        export NUM_HEADS=4
+        export NUM_KV_HEADS=2
+        export MLP_MULT=8
+        export LORA_RANK=128
+    fi
+
+    # Speed knobs
+    export DISABLE_COMPILE=1
+    export ITERATIONS=75
+    export MAX_WALLCLOCK_SECONDS=9999
+    export DATA_DETERMINISTIC=1
+    export DATA_SEED=3623123517
+    export LOSS_FILTER_ENABLED=0   # waste of time at 75 iters
+    export VAL_LOSS_EVERY=25
+    export WARMUP_STEPS=4
+
+    python3 train_gpt.py
+    local rc=$?
+    if [ $rc -ne 0 ]; then
+        echo "[FAILED] GATE: $tag — exit code $rc"
+        return 1
+    fi
+    echo "[PASSED] GATE: $tag"
+}
+
+if [ "$MODE" = "gate" ]; then
+    run_gate "1024"
+    run_gate "512"
+    exit 0
+fi
 
 if [ "$MODE" = "smoke" ] || [ "$MODE" = "both" ]; then
     run_training "SMOKETEST (60s)" 60 50 || {
