@@ -309,7 +309,7 @@ class GPT(nn.Module):
         self._init_weights()
 
         print("[debug] GPT init: compiling block (mode=default)...")
-        self.block = torch.compile(self.block, mode="default")
+        self.block = torch.compile(self.block, mode="reduce-overhead")
         print("[debug] GPT init: complete")
 
     def _init_weights(self) -> None:
