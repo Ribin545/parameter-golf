@@ -226,19 +226,48 @@ class Block(nn.Module):
     def _dropout(self, y: Tensor) -> Tensor:
         return F.dropout(y, p=self.dropout_p, training=self.training)
 
+    def _run_residual_branch(
+        self,
+        eager_fn,
+        compiled_fn,
+        x: Tensor,
+        step_idx: int | None,
+        use_compiled: bool,
+    ) -> Tensor:
+        compiled_active = use_compiled and compiled_fn is not None
+        y = (compiled_fn if compiled_active else eager_fn)(x, step_idx)
+        # Recurrent training re-invokes the same compiled branch multiple times
+        # before autograd has finished consuming prior outputs. Cloning outside
+        # torch.compile breaks the alias to CUDAGraph-managed output storage.
+        if compiled_active:
+            y = y.clone()
+        return y
+
     def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None,
                 use_compiled: bool = True) -> Tensor:
         del x0  # reserved for future recurrent skip variants
         mask = self._residual_mask(x)
-        attn_residual = self._compiled_attn_residual if use_compiled and self._compiled_attn_residual is not None else self._attn_residual
-        mlp_residual = self._compiled_mlp_residual if use_compiled and self._compiled_mlp_residual is not None else self._mlp_residual
+        attn_residual = self._run_residual_branch(
+            self._attn_residual,
+            self._compiled_attn_residual,
+            x,
+            step_idx,
+            use_compiled,
+        )
+        mlp_residual = self._run_residual_branch(
+            self._mlp_residual,
+            self._compiled_mlp_residual,
+            x,
+            step_idx,
+            use_compiled,
+        )
 
         if self.parallel_residual:
-            x = x + mask * self._dropout(attn_residual(x, step_idx)) \
-                  + mask * self._dropout(mlp_residual(x, step_idx))
+            x = x + mask * self._dropout(attn_residual) \
+                  + mask * self._dropout(mlp_residual)
         else:
-            x = x + mask * self._dropout(attn_residual(x, step_idx))
-            x = x + mask * self._dropout(mlp_residual(x, step_idx))
+            x = x + mask * self._dropout(attn_residual)
+            x = x + mask * self._dropout(mlp_residual)
         return x
 
 
