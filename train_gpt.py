@@ -521,6 +521,8 @@ def main() -> None:
         grad_scale = 1.0 / grad_accum_steps
 
         for _ in range(grad_accum_steps):
+            if hasattr(torch.compiler, "cudagraph_mark_step_begin"):
+                torch.compiler.cudagraph_mark_step_begin()
             # Determine training seq_len (curriculum if enabled)
             if args.seq_len_curriculum and step < args.seq_len_curriculum_steps:
                 cur_seq = args.short_train_seq_len
