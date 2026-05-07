@@ -43,6 +43,7 @@ def run_config(name: str, model_type: str, extra_env: dict | None = None) -> pat
     })
     if not IS_WINDOWS:
         env.setdefault("TORCH_COMPILE_MODE", "reduce-overhead")
+        env.setdefault("TORCHINDUCTOR_TRITON_CUDAGRAPHS", "0")
     if extra_env:
         env.update(extra_env)
 
