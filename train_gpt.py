@@ -18,6 +18,7 @@ import sentencepiece as spm
 
 # Modular Imports
 from model import GPT
+from model_multilayer import GPTMultiLayer
 from data_utils import DistributedTokenLoader
 from optimizer_utils import Muon
 from eval_utils import eval_val, build_sentencepiece_luts, load_validation_tokens
@@ -56,7 +57,6 @@ class LossFilter:
         self.fallback_accepts = 0
 
     def should_skip(self, loss: float) -> bool:
-        """Return True if this micro-batch loss looks pathological."""
         self.global_step += 1
         if self.global_step <= self.warmup or len(self._history) < 4:
             self._history.append(loss)
@@ -64,7 +64,6 @@ class LossFilter:
             return False
 
         history = list(self._history)
-        # Compute loss deltas over recent window
         recent = history[-self.delta_window:]
         if len(recent) >= 2:
             deltas = [recent[i + 1] - recent[i] for i in range(len(recent) - 1)]
@@ -77,7 +76,6 @@ class LossFilter:
                 self.skipped += 1
                 return True
 
-        # Also skip if loss is anomalously high relative to recent stability window
         recent_losses = history[-self.stability_window:]
         if recent_losses:
             min_recent = min(recent_losses)
@@ -90,7 +88,6 @@ class LossFilter:
         return False
 
     def force_accept(self, loss: float) -> None:
-        """Accept a batch unconditionally (fallback after max_retries)."""
         self._history.append(loss)
         self.accepted += 1
         self.fallback_accepts += 1
@@ -118,8 +115,7 @@ class Hyperparameters:
     max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 600.0))
 
     train_batch_tokens = 524_288  # NON-NEGOTIABLE COMPETITION STANDARD
-    micro_batch_tokens = 32_768
-    # TRAIN_SEQ_LEN controls training context; ScaleDown.bat sets this to 1024
+    micro_batch_tokens = int(os.environ.get("MICRO_BATCH_TOKENS", 32_768))
     train_seq_len = int(os.environ.get("TRAIN_SEQ_LEN", 1024))
 
     qk_gain_init = float(os.environ.get("QK_GAIN_INIT", 1.5))
@@ -132,8 +128,10 @@ class Hyperparameters:
     rope_base = float(os.environ.get("ROPE_BASE", 10000.0))
     logit_softcap = float(os.environ.get("LOGIT_SOFTCAP", 10.0))
 
-    # RECURRENCE_STEPS takes priority over NUM_STEPS (consistent with ScaleDown.bat logic)
+    model_type = os.environ.get("MODEL_TYPE", "recurrent")
+
     num_steps = int(os.environ.get("RECURRENCE_STEPS", os.environ.get("NUM_STEPS", 1)))
+    num_layers = int(os.environ.get("NUM_LAYERS", "11"))
     lora_rank = int(os.environ.get("LORA_RANK", 512))
     lora_scope = os.environ.get("LORA_SCOPE", "q")
 
@@ -228,7 +226,6 @@ def restore_low_dim_params_to_fp32(module: nn.Module) -> None:
 
 
 def _count_params(model: nn.Module) -> tuple[int, int]:
-    """Returns (total_params, lora_params)."""
     total = sum(p.numel() for p in model.parameters())
     lora = sum(p.numel() for n, p in model.named_parameters()
                if any(pat in n for pat in LORA_TENSOR_NAME_PATTERNS))
@@ -298,30 +295,52 @@ def main() -> None:
     val_tokens = load_validation_tokens(args.val_files, args.train_seq_len)
     base_bytes_lut, has_leading_space_lut, is_boundary_token_lut = build_sentencepiece_luts(sp, args.vocab_size, device)
 
-    print("[debug] initializing base_model...")
-    base_model = GPT(
-        vocab_size=args.vocab_size,
-        num_steps=args.num_steps,
-        model_dim=args.model_dim,
-        num_heads=args.num_heads,
-        num_kv_heads=args.num_kv_heads,
-        mlp_mult=args.mlp_mult,
-        tie_embeddings=args.tie_embeddings,
-        tied_embed_init_std=args.tied_embed_init_std,
-        logit_softcap=args.logit_softcap,
-        rope_base=args.rope_base,
-        qk_gain_init=args.qk_gain_init,
-        lora_rank=args.lora_rank,
-        lora_scope=args.lora_scope,
-        bigram_hash_enabled=args.bigram_hash_enabled,
-        bigram_hash_size=args.bigram_hash_size,
-        bigram_hash_scale=args.bigram_hash_scale,
-        level_signal_enabled=args.level_signal_enabled,
-        level_rank=args.level_signal_rank,
-        shell_centering_enabled=args.shell_centering_enabled,
-        shell_centering_lam=args.shell_centering_lam,
-        parallel_residual=args.parallel_residual,
-    ).to(device).bfloat16()
+    model_type = args.model_type.strip()
+    print(f"[debug] initializing base_model... MODEL_TYPE='{model_type}'")
+
+    if model_type == "multilayer":
+        base_model = GPTMultiLayer(
+            vocab_size=args.vocab_size,
+            num_layers=args.num_layers,
+            model_dim=args.model_dim,
+            num_heads=args.num_heads,
+            num_kv_heads=args.num_kv_heads,
+            mlp_mult=args.mlp_mult,
+            tie_embeddings=args.tie_embeddings,
+            tied_embed_init_std=args.tied_embed_init_std,
+            logit_softcap=args.logit_softcap,
+            rope_base=args.rope_base,
+            qk_gain_init=args.qk_gain_init,
+            bigram_hash_size=args.bigram_hash_size,
+            bigram_hash_scale=args.bigram_hash_scale,
+            ve_enabled=True,
+            ve_dim=128,
+            ve_layers=(9, 10),
+        ).to(device).bfloat16()
+    else:
+        base_model = GPT(
+            vocab_size=args.vocab_size,
+            num_steps=args.num_steps,
+            model_dim=args.model_dim,
+            num_heads=args.num_heads,
+            num_kv_heads=args.num_kv_heads,
+            mlp_mult=args.mlp_mult,
+            tie_embeddings=args.tie_embeddings,
+            tied_embed_init_std=args.tied_embed_init_std,
+            logit_softcap=args.logit_softcap,
+            rope_base=args.rope_base,
+            qk_gain_init=args.qk_gain_init,
+            lora_rank=args.lora_rank,
+            lora_scope=args.lora_scope,
+            bigram_hash_enabled=args.bigram_hash_enabled,
+            bigram_hash_size=args.bigram_hash_size,
+            bigram_hash_scale=args.bigram_hash_scale,
+            level_signal_enabled=args.level_signal_enabled,
+            level_rank=args.level_signal_rank,
+            shell_centering_enabled=args.shell_centering_enabled,
+            shell_centering_lam=args.shell_centering_lam,
+            parallel_residual=args.parallel_residual,
+        ).to(device).bfloat16()
 
     total_params, lora_params = _count_params(base_model)
     lora_frac = lora_params / total_params if total_params > 0 else 0.0

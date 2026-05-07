@@ -24,17 +24,20 @@ class CastedLinear(nn.Linear):
         return F.linear(x, self.weight.to(x.dtype), bias)
 
 class RelaxedLinear(CastedLinear):
+    """Linear layer with optional per-step LoRA. rank=0 disables LoRA entirely."""
     def __init__(self, in_features, out_features, num_steps, rank, bias=False):
         super().__init__(in_features, out_features, bias=bias)
         self.num_steps = num_steps
         self.rank = rank
-        self.lora_A = nn.Parameter(torch.empty(num_steps, out_features, rank))
-        self.lora_B = nn.Parameter(torch.empty(num_steps, rank, in_features))
-        self.register_buffer("scaling", torch.tensor(1.0 / math.sqrt(rank), dtype=torch.float32))
+        self.has_lora = rank > 0
+        if self.has_lora:
+            self.lora_A = nn.Parameter(torch.empty(num_steps, out_features, rank))
+            self.lora_B = nn.Parameter(torch.empty(num_steps, rank, in_features))
+            self.register_buffer("scaling", torch.tensor(1.0 / math.sqrt(rank), dtype=torch.float32))
 
     def forward(self, x: Tensor, step_idx: int | None = None) -> Tensor:
         y = super().forward(x)
-        if step_idx is not None:
+        if self.has_lora and step_idx is not None:
             dtype = x.dtype
             a = self.lora_A[step_idx].to(dtype)
             b = self.lora_B[step_idx].to(dtype)
@@ -250,6 +253,9 @@ class GPT(nn.Module):
         self.tok_emb = nn.Embedding(vocab_size, model_dim)
         self.num_steps = num_steps
         self.step_embeddings = nn.Parameter(torch.randn(num_steps, model_dim) * 0.002)
+        # Pre-create step indices as CPU tensors — torch.compile can const-fold these
+        # into the CUDA graph, avoiding per-iteration tensor creation in the loop.
+        self._step_indices = [torch.tensor(i, dtype=torch.int32) for i in range(num_steps)]
 
         # Optional BigramHash correction on token embeddings
         self.bigram_hash = (
@@ -303,8 +309,13 @@ class GPT(nn.Module):
         if os.environ.get("DISABLE_COMPILE") == "1":
             print("[debug] GPT init: torch.compile SKIPPED (DISABLE_COMPILE=1)")
         else:
-            print("[debug] GPT init: compiling block (mode=default)...")
-            self.block = torch.compile(self.block, mode="default")
+            # Multi-step recurrence → compile full forward_logits for CUDA graph fusion
+            if num_steps > 1:
+                print(f"[debug] GPT init: compiling full forward_logits (mode=default, steps={num_steps})...")
+                self.forward_logits = torch.compile(self.forward_logits, mode="default")
+            else:
+                print("[debug] GPT init: compiling block (mode=default)...")
+                self.block = torch.compile(self.block, mode="default")
         print("[debug] GPT init: complete")
 
     def _init_weights(self) -> None:
@@ -321,7 +332,7 @@ class GPT(nn.Module):
                     nn.init.xavier_uniform_(module.weight, gain=1.0)
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
-            if isinstance(module, RelaxedLinear):
+            if isinstance(module, RelaxedLinear) and module.has_lora:
                 for i in range(module.num_steps):
                     nn.init.kaiming_uniform_(module.lora_A[i], a=math.sqrt(5))
                     nn.init.zeros_(module.lora_B[i])
@@ -337,7 +348,7 @@ class GPT(nn.Module):
         x0 = x
 
         for i in range(self.num_steps):
-            step_idx_tensor = torch.tensor(i, dtype=torch.int32)
+            step_idx_tensor = self._step_indices[i]
             x = x + self.step_embeddings[i][None, None, :]
             if self.level_signal_enabled:
                 down = self.level_down[i].to(dtype=x.dtype)
@@ -345,8 +356,7 @@ class GPT(nn.Module):
                 signal = (x @ down) @ up
                 gain = torch.tanh(self.level_gain[i]).to(dtype=x.dtype)
                 x = x + gain * signal
-            block_fn = self.block if use_compiled else getattr(self.block, "_orig_mod", self.block)
-            x = block_fn(x, x0, step_idx_tensor)
+            x = self.block(x, x0, step_idx_tensor)
 
         x = self.final_norm(x)
         if self.tie_embeddings:

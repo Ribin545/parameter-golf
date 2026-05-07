@@ -97,7 +97,10 @@ def eval_val(
             else:
                 p.requires_grad = False
         
-        optimizer = torch.optim.SGD(ttt_params, lr=ttt_lr)
+        if ttt_params:
+            optimizer = torch.optim.SGD(ttt_params, lr=ttt_lr)
+        else:
+            optimizer = None
     else:
         # Standard Eval: No gradients needed anywhere
         for p in model.parameters():
@@ -155,7 +158,7 @@ def eval_val(
             val_byte_count += token_bytes.to(torch.float64).sum()
 
         # 2. ADAPT PHASE (Legal TTT)
-        if ttt_lr > 0:
+        if ttt_lr > 0 and optimizer is not None:
             # Eager execution for adaptation to avoid Inductor re-compilation on Windows
             logits_ttt = model.forward_logits(x, use_compiled=False)
             loss_for_backprop = F.cross_entropy(logits_ttt.permute(0, 2, 1).float(), y, reduction="none").mean()
