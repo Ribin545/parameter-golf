@@ -144,6 +144,11 @@ class Hyperparameters:
     shell_centering_enabled = bool(int(os.environ.get("SHELL_CENTERING_ENABLED", "0")))
     shell_centering_lam = float(os.environ.get("SHELL_CENTERING_LAM", "0.008"))
     parallel_residual = bool(int(os.environ.get("PARALLEL_RESIDUAL", "0")))
+    dropout_p = float(os.environ.get("DROPOUT_P", "0.15"))
+    label_smoothing = float(os.environ.get("LABEL_SMOOTHING", "0.05"))
+    recurrent_attn_every = int(os.environ.get("RECURRENT_ATTN_EVERY", "1"))
+    recurrent_refine_mlp_ratio = float(os.environ.get("RECURRENT_REFINE_MLP_RATIO", "1.0"))
+    recurrent_attend_last = bool(int(os.environ.get("RECURRENT_ATTEND_LAST", "1")))
     schedule_free = bool(int(os.environ.get("SCHEDULE_FREE", "0")))
     ttt_enabled = bool(int(os.environ.get("TTT_ENABLED", "0")))
     ttt_lr = float(os.environ.get("TTT_LR", "0.0004"))
@@ -277,6 +282,7 @@ def main() -> None:
         log0(f"[config] batch: train_batch_tokens={args.train_batch_tokens} micro_batch_tokens={args.micro_batch_tokens} grad_accum_steps={grad_accum_steps}")
         log0(f"[config] data: TRAIN_SEQ_LEN(eval)={args.train_seq_len} VAL_BATCH_SIZE={args.val_batch_size} VAL_LOSS_EVERY={args.val_loss_every}")
         log0(f"[config] model: dim={args.model_dim} heads={args.num_heads} kv_heads={args.num_kv_heads} mlp_mult={args.mlp_mult} steps={args.num_steps} lora_rank={args.lora_rank} lora_scope={args.lora_scope}")
+        log0(f"[config] recurrent_speed: ATTN_EVERY={args.recurrent_attn_every} REFINE_MLP_RATIO={args.recurrent_refine_mlp_ratio} ATTEND_LAST={int(args.recurrent_attend_last)} DROPOUT_P={args.dropout_p} LABEL_SMOOTHING={args.label_smoothing}")
         log0(f"[config] features: BIGRAM_HASH={int(args.bigram_hash_enabled)} BIGRAM_HASH_SIZE={args.bigram_hash_size} BIGRAM_HASH_SCALE={args.bigram_hash_scale} LEVEL_SIGNAL={int(args.level_signal_enabled)} LEVEL_SIGNAL_RANK={args.level_signal_rank or 0} SHELL_CENTERING={int(args.shell_centering_enabled)} SHELL_CENTERING_LAM={args.shell_centering_lam}")
         log0(f"[config] optim: MATRIX_LR={args.matrix_lr} MUON_BACKEND_STEPS={args.muon_backend_steps} MUON_MOMENTUM={args.muon_momentum} SCALAR_LR={args.scalar_lr}")
         log0(f"[config] optim_groups: LORA_LR={args.lora_lr} CONTROL_LR={args.control_lr} SCALAR_WD={args.scalar_weight_decay} LORA_WD={args.lora_weight_decay} CONTROL_WD={args.control_weight_decay}")
@@ -340,6 +346,11 @@ def main() -> None:
             shell_centering_enabled=args.shell_centering_enabled,
             shell_centering_lam=args.shell_centering_lam,
             parallel_residual=args.parallel_residual,
+            dropout_p=args.dropout_p,
+            label_smoothing=args.label_smoothing,
+            recurrent_attn_every=args.recurrent_attn_every,
+            recurrent_refine_mlp_ratio=args.recurrent_refine_mlp_ratio,
+            recurrent_attend_last=args.recurrent_attend_last,
         ).to(device).bfloat16()
 
     total_params, lora_params = _count_params(base_model)

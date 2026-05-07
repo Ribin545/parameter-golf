@@ -163,6 +163,7 @@ class MLP(nn.Module):
     def __init__(self, dim: int, mlp_mult: int, num_steps: int, rank: int, lora_scope: str = "q"):
         super().__init__()
         hidden = mlp_mult * dim
+        self.hidden = hidden
         self.use_lora = lora_scope == "full"
         if self.use_lora:
             self.fc = RelaxedLinear(dim, hidden, num_steps, rank, bias=False)
@@ -172,25 +173,49 @@ class MLP(nn.Module):
             self.proj = CastedLinear(hidden, dim, bias=False)
         self.proj._zero_init = True
 
-    def forward(self, x: Tensor, step_idx: int | None = None) -> Tensor:
+    def _active_hidden_size(self, hidden_fraction: float) -> int:
+        if hidden_fraction >= 0.999:
+            return self.hidden
+        granularity = min(128, self.hidden)
+        raw = max(1, int(self.hidden * max(hidden_fraction, 0.0)))
+        active = max(granularity, (raw // granularity) * granularity)
+        return min(self.hidden, active)
+
+    def _project_partial(self, x: Tensor, step_idx: int | None, active_hidden: int) -> Tensor:
+        dtype = x.dtype
+        proj_weight = self.proj.weight[:, :active_hidden].to(dtype)
+        y = F.linear(x, proj_weight)
+        if self.use_lora and step_idx is not None:
+            a_proj = self.proj.lora_A[step_idx].to(dtype)
+            b_proj = self.proj.lora_B[step_idx][:, :active_hidden].to(dtype)
+            y = y + (x @ b_proj.t()) @ a_proj.t() * self.proj.scaling.to(dtype)
+        return y
+
+    def forward(self, x: Tensor, step_idx: int | None = None, hidden_fraction: float = 1.0) -> Tensor:
+        active_hidden = self._active_hidden_size(hidden_fraction)
         if self.use_lora:
             lora_fc_out = 0.0
             if step_idx is not None:
                 dtype = x.dtype
-                a_fc = self.fc.lora_A[step_idx].to(dtype)
+                a_fc = self.fc.lora_A[step_idx][:active_hidden].to(dtype)
                 b_fc = self.fc.lora_B[step_idx].to(dtype)
                 lora_fc_out = (x @ b_fc.t()) @ a_fc.t() * self.fc.scaling
-            x = fused_relu2(x, self.fc.weight.t()) + lora_fc_out
+            x = fused_relu2(x, self.fc.weight[:active_hidden].t()) + lora_fc_out
+            if active_hidden < self.hidden:
+                return self._project_partial(x, step_idx, active_hidden)
             return self.proj(x, step_idx)
         else:
-            x = fused_relu2(x, self.fc.weight.t())
+            x = fused_relu2(x, self.fc.weight[:active_hidden].t())
+            if active_hidden < self.hidden:
+                return F.linear(x, self.proj.weight[:, :active_hidden].to(x.dtype))
             return self.proj(x)
 
 
 class Block(nn.Module):
     def __init__(self, dim: int, num_heads: int, num_kv_heads: int, mlp_mult: int,
                  rope_base: float, qk_gain_init: float, num_steps: int, rank: int,
-                 lora_scope: str = "q", parallel_residual: bool = False):
+                 lora_scope: str = "q", parallel_residual: bool = False,
+                 dropout_p: float = 0.15):
         super().__init__()
         self.parallel_residual = parallel_residual
         self.attn_norm = RMSNorm()
@@ -200,7 +225,7 @@ class Block(nn.Module):
         self.mlp = MLP(dim, mlp_mult, num_steps, rank, lora_scope=lora_scope)
         self.attn_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
-        self.dropout_p = 0.15
+        self.dropout_p = float(dropout_p)
         self._compiled_attn_residual = None
         self._compiled_mlp_residual = None
 
@@ -214,8 +239,8 @@ class Block(nn.Module):
         attn_out = self.attn(self.attn_norm(x), step_idx)
         return self.attn_scale[None, None, :].to(dtype=attn_out.dtype) * attn_out
 
-    def _mlp_residual(self, x: Tensor, step_idx: int | None = None) -> Tensor:
-        mlp_out = self.mlp(self.mlp_norm(x), step_idx)
+    def _mlp_residual(self, x: Tensor, step_idx: int | None = None, hidden_fraction: float = 1.0) -> Tensor:
+        mlp_out = self.mlp(self.mlp_norm(x), step_idx, hidden_fraction=hidden_fraction)
         return self.mlp_scale[None, None, :].to(dtype=mlp_out.dtype) * mlp_out
 
     def _residual_mask(self, x: Tensor) -> Tensor | float:
@@ -239,30 +264,53 @@ class Block(nn.Module):
         compiled_active = use_compiled and compiled_fn is not None and not self.training
         return (compiled_fn if compiled_active else eager_fn)(x, step_idx)
 
+    def _run_mlp_branch(
+        self,
+        x: Tensor,
+        step_idx: int | None,
+        use_compiled: bool,
+        hidden_fraction: float,
+    ) -> Tensor:
+        if hidden_fraction >= 0.999:
+            return self._run_residual_branch(
+                self._mlp_residual,
+                self._compiled_mlp_residual,
+                x,
+                step_idx,
+                use_compiled,
+            )
+        return self._mlp_residual(x, step_idx, hidden_fraction=hidden_fraction)
+
     def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None,
-                use_compiled: bool = True) -> Tensor:
+                use_compiled: bool = True, attend: bool = True,
+                mlp_hidden_fraction: float = 1.0) -> Tensor:
         del x0  # reserved for future recurrent skip variants
         mask = self._residual_mask(x)
-        attn_residual = self._run_residual_branch(
-            self._attn_residual,
-            self._compiled_attn_residual,
-            x,
-            step_idx,
-            use_compiled,
-        )
-        mlp_residual = self._run_residual_branch(
-            self._mlp_residual,
-            self._compiled_mlp_residual,
-            x,
-            step_idx,
-            use_compiled,
-        )
 
         if self.parallel_residual:
-            x = x + mask * self._dropout(attn_residual) \
-                  + mask * self._dropout(mlp_residual)
+            residual = 0.0
+            if attend:
+                attn_residual = self._run_residual_branch(
+                    self._attn_residual,
+                    self._compiled_attn_residual,
+                    x,
+                    step_idx,
+                    use_compiled,
+                )
+                residual = residual + mask * self._dropout(attn_residual)
+            mlp_residual = self._run_mlp_branch(x, step_idx, use_compiled, mlp_hidden_fraction)
+            x = x + residual + mask * self._dropout(mlp_residual)
         else:
-            x = x + mask * self._dropout(attn_residual)
+            if attend:
+                attn_residual = self._run_residual_branch(
+                    self._attn_residual,
+                    self._compiled_attn_residual,
+                    x,
+                    step_idx,
+                    use_compiled,
+                )
+                x = x + mask * self._dropout(attn_residual)
+            mlp_residual = self._run_mlp_branch(x, step_idx, use_compiled, mlp_hidden_fraction)
             x = x + mask * self._dropout(mlp_residual)
         return x
 
@@ -291,14 +339,23 @@ class GPT(nn.Module):
         shell_centering_enabled: bool = False,
         shell_centering_lam: float = 0.008,
         parallel_residual: bool = False,
+        dropout_p: float = 0.15,
+        label_smoothing: float = 0.05,
+        recurrent_attn_every: int = 1,
+        recurrent_refine_mlp_ratio: float = 1.0,
+        recurrent_attend_last: bool = True,
     ):
         super().__init__()
         print(f"[debug] GPT init: steps={num_steps}, dim={model_dim}")
         self.tie_embeddings = tie_embeddings
         self.tied_embed_init_std = tied_embed_init_std
         self.logit_softcap = logit_softcap
+        self.label_smoothing = float(label_smoothing)
         self.tok_emb = nn.Embedding(vocab_size, model_dim)
         self.num_steps = num_steps
+        self.recurrent_attn_every = max(1, int(recurrent_attn_every))
+        self.recurrent_refine_mlp_ratio = min(max(float(recurrent_refine_mlp_ratio), 0.0), 1.0)
+        self.recurrent_attend_last = bool(recurrent_attend_last)
         self.step_embeddings = nn.Parameter(torch.randn(num_steps, model_dim) * 0.002)
         # Pre-create step indices as CPU tensors — torch.compile can const-fold these
         # into the CUDA graph, avoiding per-iteration tensor creation in the loop.
@@ -334,7 +391,7 @@ class GPT(nn.Module):
         print("[debug] GPT init: creating block...")
         self.block = Block(model_dim, num_heads, num_kv_heads, mlp_mult, rope_base,
                            qk_gain_init, num_steps, lora_rank, lora_scope=lora_scope,
-                           parallel_residual=parallel_residual)
+                           parallel_residual=parallel_residual, dropout_p=dropout_p)
 
         self.final_norm = RMSNorm()
         self.lm_head = None if tie_embeddings else CastedLinear(model_dim, vocab_size, bias=False)
@@ -385,6 +442,15 @@ class GPT(nn.Module):
             if isinstance(module, CausalSelfAttention):
                 nn.init.normal_(module.v_step_bias, mean=0.0, std=0.002)
 
+    def _step_uses_attention(self, step_idx: int) -> bool:
+        if self.recurrent_attn_every <= 1 or self.num_steps <= 1:
+            return True
+        if step_idx == 0:
+            return True
+        if self.recurrent_attend_last and step_idx == self.num_steps - 1:
+            return True
+        return (step_idx % self.recurrent_attn_every) == 0
+
     def forward_logits(self, input_ids: Tensor, use_compiled: bool = True) -> Tensor:
         x = self.tok_emb(input_ids)
         if self.bigram_hash is not None:
@@ -397,13 +463,22 @@ class GPT(nn.Module):
         for i in range(self.num_steps):
             step_idx_tensor = self._step_indices[i]
             x = x + self.step_embeddings[i][None, None, :]
+            attend = self._step_uses_attention(i)
+            mlp_hidden_fraction = 1.0 if attend else self.recurrent_refine_mlp_ratio
             if self.level_signal_enabled:
                 down = self.level_down[i].to(dtype=x.dtype)
                 up = self.level_up[i].to(dtype=x.dtype)
                 signal = (x @ down) @ up
                 gain = torch.tanh(self.level_gain[i]).to(dtype=x.dtype)
                 x = x + gain * signal
-            x = self.block(x, x0, step_idx_tensor, use_compiled=compiled_ok)
+            x = self.block(
+                x,
+                x0,
+                step_idx_tensor,
+                use_compiled=compiled_ok,
+                attend=attend,
+                mlp_hidden_fraction=mlp_hidden_fraction,
+            )
 
         x = self.final_norm(x)
         if self.tie_embeddings:
@@ -415,7 +490,12 @@ class GPT(nn.Module):
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
         logits = self.forward_logits(input_ids)
-        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)).float(), target_ids.reshape(-1), reduction="mean", label_smoothing=0.05)
+        loss = F.cross_entropy(
+            logits.reshape(-1, logits.size(-1)).float(),
+            target_ids.reshape(-1),
+            reduction="mean",
+            label_smoothing=self.label_smoothing,
+        )
         if self.shell_centering is not None:
             loss = loss + self.shell_centering.penalty.to(loss.dtype)
         return loss
