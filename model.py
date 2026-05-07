@@ -234,14 +234,10 @@ class Block(nn.Module):
         step_idx: int | None,
         use_compiled: bool,
     ) -> Tensor:
-        compiled_active = use_compiled and compiled_fn is not None
-        y = (compiled_fn if compiled_active else eager_fn)(x, step_idx)
-        # Recurrent training re-invokes the same compiled branch multiple times
-        # before autograd has finished consuming prior outputs. Cloning outside
-        # torch.compile breaks the alias to CUDAGraph-managed output storage.
-        if compiled_active:
-            y = y.clone()
-        return y
+        # Compiled recurrent training remains unsafe under grad accumulation,
+        # so reserve compiled residual branches for eval/inference only.
+        compiled_active = use_compiled and compiled_fn is not None and not self.training
+        return (compiled_fn if compiled_active else eager_fn)(x, step_idx)
 
     def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None,
                 use_compiled: bool = True) -> Tensor:
@@ -363,7 +359,7 @@ class GPT(nn.Module):
             compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
             print(
                 f"[debug] GPT init: compiling deterministic block subgraphs "
-                f"(mode={compile_mode}, steps={num_steps})..."
+                f"(mode={compile_mode}, steps={num_steps}; multi-step training stays eager)..."
             )
             self.block.compile_deterministic_paths(compile_mode)
         print("[debug] GPT init: complete")
@@ -396,6 +392,7 @@ class GPT(nn.Module):
         if self.shell_centering is not None:
             x = self.shell_centering(x)
         x0 = x
+        compiled_ok = use_compiled and (not self.training or self.num_steps <= 1)
 
         for i in range(self.num_steps):
             step_idx_tensor = self._step_indices[i]
@@ -406,7 +403,7 @@ class GPT(nn.Module):
                 signal = (x @ down) @ up
                 gain = torch.tanh(self.level_gain[i]).to(dtype=x.dtype)
                 x = x + gain * signal
-            x = self.block(x, x0, step_idx_tensor, use_compiled=use_compiled)
+            x = self.block(x, x0, step_idx_tensor, use_compiled=compiled_ok)
 
         x = self.final_norm(x)
         if self.tie_embeddings:
