@@ -201,25 +201,44 @@ class Block(nn.Module):
         self.attn_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
         self.dropout_p = 0.15
+        self._compiled_attn_residual = None
+        self._compiled_mlp_residual = None
 
-    def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None) -> Tensor:
+    def compile_deterministic_paths(self, mode: str) -> None:
+        # Keep stochastic training behavior eager, and only compile deterministic
+        # residual branches so recurrent training avoids graph-capturing random ops.
+        self._compiled_attn_residual = torch.compile(self._attn_residual, mode=mode)
+        self._compiled_mlp_residual = torch.compile(self._mlp_residual, mode=mode)
+
+    def _attn_residual(self, x: Tensor, step_idx: int | None = None) -> Tensor:
+        attn_out = self.attn(self.attn_norm(x), step_idx)
+        return self.attn_scale[None, None, :].to(dtype=attn_out.dtype) * attn_out
+
+    def _mlp_residual(self, x: Tensor, step_idx: int | None = None) -> Tensor:
+        mlp_out = self.mlp(self.mlp_norm(x), step_idx)
+        return self.mlp_scale[None, None, :].to(dtype=mlp_out.dtype) * mlp_out
+
+    def _residual_mask(self, x: Tensor) -> Tensor | float:
         if self.training:
-            mask = (torch.rand(1, device=x.device) > 0.04).to(dtype=x.dtype)
-        else:
-            mask = 1.0
+            return (torch.rand(1, device=x.device) > 0.04).to(dtype=x.dtype)
+        return 1.0
 
-        def _dropout(y: Tensor) -> Tensor:
-            return F.dropout(y, p=self.dropout_p, training=self.training)
+    def _dropout(self, y: Tensor) -> Tensor:
+        return F.dropout(y, p=self.dropout_p, training=self.training)
+
+    def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None,
+                use_compiled: bool = True) -> Tensor:
+        del x0  # reserved for future recurrent skip variants
+        mask = self._residual_mask(x)
+        attn_residual = self._compiled_attn_residual if use_compiled and self._compiled_attn_residual is not None else self._attn_residual
+        mlp_residual = self._compiled_mlp_residual if use_compiled and self._compiled_mlp_residual is not None else self._mlp_residual
 
         if self.parallel_residual:
-            attn_out = self.attn(self.attn_norm(x), step_idx)
-            mlp_out = self.mlp(self.mlp_norm(x), step_idx)
-            x = x + mask * self.attn_scale[None, None, :] * _dropout(attn_out) \
-                  + mask * self.mlp_scale[None, None, :] * _dropout(mlp_out)
+            x = x + mask * self._dropout(attn_residual(x, step_idx)) \
+                  + mask * self._dropout(mlp_residual(x, step_idx))
         else:
-            attn_out = self.attn(self.attn_norm(x), step_idx)
-            x = x + mask * self.attn_scale[None, None, :] * _dropout(attn_out)
-            x = x + mask * self.mlp_scale[None, None, :] * _dropout(self.mlp(self.mlp_norm(x), step_idx))
+            x = x + mask * self._dropout(attn_residual(x, step_idx))
+            x = x + mask * self._dropout(mlp_residual(x, step_idx))
         return x
 
 
@@ -313,13 +332,11 @@ class GPT(nn.Module):
             print("[debug] GPT init: torch.compile SKIPPED (DISABLE_COMPILE=1)")
         else:
             compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
-            # Multi-step recurrence → compile full forward_logits for CUDA graph fusion
-            if num_steps > 1:
-                print(f"[debug] GPT init: compiling full forward_logits (mode={compile_mode}, steps={num_steps})...")
-                self.forward_logits = torch.compile(self.forward_logits, mode=compile_mode)
-            else:
-                print(f"[debug] GPT init: compiling block (mode={compile_mode})...")
-                self.block = torch.compile(self.block, mode=compile_mode)
+            print(
+                f"[debug] GPT init: compiling deterministic block subgraphs "
+                f"(mode={compile_mode}, steps={num_steps})..."
+            )
+            self.block.compile_deterministic_paths(compile_mode)
         print("[debug] GPT init: complete")
 
     def _init_weights(self) -> None:
@@ -360,7 +377,7 @@ class GPT(nn.Module):
                 signal = (x @ down) @ up
                 gain = torch.tanh(self.level_gain[i]).to(dtype=x.dtype)
                 x = x + gain * signal
-            x = self.block(x, x0, step_idx_tensor)
+            x = self.block(x, x0, step_idx_tensor, use_compiled=use_compiled)
 
         x = self.final_norm(x)
         if self.tie_embeddings:
