@@ -309,13 +309,14 @@ class GPT(nn.Module):
         if os.environ.get("DISABLE_COMPILE") == "1":
             print("[debug] GPT init: torch.compile SKIPPED (DISABLE_COMPILE=1)")
         else:
+            compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
             # Multi-step recurrence → compile full forward_logits for CUDA graph fusion
             if num_steps > 1:
-                print(f"[debug] GPT init: compiling full forward_logits (mode=default, steps={num_steps})...")
-                self.forward_logits = torch.compile(self.forward_logits, mode="default")
+                print(f"[debug] GPT init: compiling full forward_logits (mode={compile_mode}, steps={num_steps})...")
+                self.forward_logits = torch.compile(self.forward_logits, mode=compile_mode)
             else:
-                print("[debug] GPT init: compiling block (mode=default)...")
-                self.block = torch.compile(self.block, mode="default")
+                print(f"[debug] GPT init: compiling block (mode={compile_mode})...")
+                self.block = torch.compile(self.block, mode=compile_mode)
         print("[debug] GPT init: complete")
 
     def _init_weights(self) -> None:

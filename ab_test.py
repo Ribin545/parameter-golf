@@ -41,6 +41,8 @@ def run_config(name: str, model_type: str, extra_env: dict | None = None) -> pat
         # Validate every 10 steps
         "VAL_LOSS_EVERY": "10",
     })
+    if not IS_WINDOWS:
+        env.setdefault("TORCH_COMPILE_MODE", "reduce-overhead")
     if extra_env:
         env.update(extra_env)
 
