@@ -21,3 +21,9 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Dataset (auto-downloaded, ~20 GB)
+data/
+
+# AB test logs (generated)
+ab_logs/
