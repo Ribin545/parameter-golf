@@ -23,7 +23,7 @@ if [ -d "$REPO_DIR/.git" ]; then
     cd "$REPO_DIR"
     git fetch origin
     git reset --hard origin/master
-    git pull origin master
+    git checkout -B master origin/master
 else
     if [ -d "$REPO_DIR" ]; then
         echo "[bootstrap] Directory exists but no .git — removing and re-cloning..."
@@ -32,6 +32,16 @@ else
     echo "[bootstrap] Cloning repo..."
     git clone "$REPO_URL" "$REPO_DIR"
     cd "$REPO_DIR"
+    git fetch origin
+    git checkout -B master origin/master
+fi
+
+echo "[bootstrap] Repo HEAD: $(git rev-parse --short HEAD)"
+ls -1
+
+if [ ! -f run_ab_test.sh ]; then
+    echo "[bootstrap][fatal] run_ab_test.sh missing after checkout"
+    exit 1
 fi
 
 # --- Step 2: Install dependencies ---
