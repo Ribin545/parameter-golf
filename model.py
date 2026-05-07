@@ -351,6 +351,7 @@ class GPT(nn.Module):
         self.tied_embed_init_std = tied_embed_init_std
         self.logit_softcap = logit_softcap
         self.label_smoothing = float(label_smoothing)
+        self.allow_compiled_recurrent_train = os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1"
         self.tok_emb = nn.Embedding(vocab_size, model_dim)
         self.num_steps = num_steps
         self.recurrent_attn_every = max(1, int(recurrent_attn_every))
@@ -414,9 +415,10 @@ class GPT(nn.Module):
             print("[debug] GPT init: torch.compile SKIPPED (DISABLE_COMPILE=1)")
         else:
             compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
+            compile_policy = "multi-step training compile enabled" if self.allow_compiled_recurrent_train else "multi-step training stays eager"
             print(
                 f"[debug] GPT init: compiling deterministic block subgraphs "
-                f"(mode={compile_mode}, steps={num_steps}; multi-step training stays eager)..."
+                f"(mode={compile_mode}, steps={num_steps}; {compile_policy})..."
             )
             self.block.compile_deterministic_paths(compile_mode)
         print("[debug] GPT init: complete")
@@ -458,7 +460,9 @@ class GPT(nn.Module):
         if self.shell_centering is not None:
             x = self.shell_centering(x)
         x0 = x
-        compiled_ok = use_compiled and (not self.training or self.num_steps <= 1)
+        compiled_ok = use_compiled and (
+            not self.training or self.num_steps <= 1 or self.allow_compiled_recurrent_train
+        )
 
         for i in range(self.num_steps):
             step_idx_tensor = self._step_indices[i]

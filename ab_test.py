@@ -42,7 +42,10 @@ def run_config(name: str, model_type: str, extra_env: dict | None = None) -> pat
         "VAL_LOSS_EVERY": "10",
     })
     if not IS_WINDOWS:
-        env.setdefault("TORCH_COMPILE_MODE", "reduce-overhead")
+        env.setdefault("TORCH_COMPILE_MODE", "max-autotune-no-cudagraphs")
+        env.setdefault("ENABLE_RECURRENT_TRAIN_COMPILE", "1")
+        env.setdefault("MICRO_BATCH_TOKENS", "65536")
+        env.setdefault("TRAIN_LOG_EVERY", "10")
     if extra_env:
         env.update(extra_env)
 
@@ -58,6 +61,12 @@ def run_config(name: str, model_type: str, extra_env: dict | None = None) -> pat
     print(f"[{name}] Starting run (MODEL_TYPE={model_type}, platform={sys.platform})...")
     print(f"[{name}] Launcher: {launcher}")
     print(f"[{name}] Log: {log_path}")
+    print(
+        f"[{name}] Speed env: MICRO_BATCH_TOKENS={env.get('MICRO_BATCH_TOKENS')} "
+        f"TORCH_COMPILE_MODE={env.get('TORCH_COMPILE_MODE')} "
+        f"ENABLE_RECURRENT_TRAIN_COMPILE={env.get('ENABLE_RECURRENT_TRAIN_COMPILE')} "
+        f"TRAIN_LOG_EVERY={env.get('TRAIN_LOG_EVERY')}"
+    )
     print(f"{'='*60}")
 
     with open(log_path, "w", encoding="utf-8") as log_f:

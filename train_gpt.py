@@ -13,6 +13,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+import torch._inductor.config as inductor_config
 from torch.nn.parallel import DistributedDataParallel as DDP
 import sentencepiece as spm
 
@@ -255,6 +256,12 @@ def main() -> None:
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1":
+        try:
+            if hasattr(inductor_config, "triton") and hasattr(inductor_config.triton, "cudagraphs"):
+                inductor_config.triton.cudagraphs = False
+        except Exception:
+            pass
 
     logfile = f"logs/{args.run_id}.txt" if master_process else None
     global _LOG_FILE, _MASTER_PROCESS
@@ -529,7 +536,8 @@ def main() -> None:
         for opt in optimizers:
             opt.zero_grad(set_to_none=True)
         step_loss = 0.0
-        grad_scale = 1.0 / grad_accum_steps
+        loss_log_scale = 1.0 / grad_accum_steps
+        backward_scale = loss_log_scale / max(args.num_steps, 1)
 
         for _ in range(grad_accum_steps):
             if hasattr(torch.compiler, "cudagraph_mark_step_begin"):
@@ -551,13 +559,13 @@ def main() -> None:
                     retries += 1
                     if retries >= args.loss_filter_max_retries:
                         loss_filter.force_accept(loss_val)
-                        (loss * grad_scale).backward()
-                        step_loss += loss_val * grad_scale
+                        (loss * backward_scale).backward()
+                        step_loss += loss_val * loss_log_scale
                         break
                     continue
                 else:
-                    (loss * grad_scale).backward()
-                    step_loss += loss_val * grad_scale
+                    (loss * backward_scale).backward()
+                    step_loss += loss_val * loss_log_scale
                     break
 
         if loss_filter is not None and step % 100 == 0:
@@ -577,12 +585,6 @@ def main() -> None:
         # Muon momentum warmup
         frac = min(step / max(args.warmup_steps, 1), 1.0)
         muon_momentum = (1 - frac) * args.muon_momentum_warmup_start + frac * args.muon_momentum
-
-        # Gradient div by num_steps (needed for multi-step recurrent models)
-        if args.num_steps > 1:
-            for p in model.parameters():
-                if p.grad is not None:
-                    p.grad.div_(args.num_steps)
 
         # Optional dynamic gradient norm scaling
         if args.dynamic_lr_norm:
