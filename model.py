@@ -200,7 +200,7 @@ class Block(nn.Module):
         self.mlp = MLP(dim, mlp_mult, num_steps, rank, lora_scope=lora_scope)
         self.attn_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.full((dim,), 1e-4, dtype=torch.float32))
-        self.dropout = nn.Dropout(0.15)
+        self.dropout_p = 0.15
 
     def forward(self, x: Tensor, x0: Tensor, step_idx: int | None = None) -> Tensor:
         if self.training:
@@ -208,15 +208,18 @@ class Block(nn.Module):
         else:
             mask = 1.0
 
+        def _dropout(y: Tensor) -> Tensor:
+            return F.dropout(y, p=self.dropout_p, training=self.training)
+
         if self.parallel_residual:
             attn_out = self.attn(self.attn_norm(x), step_idx)
             mlp_out = self.mlp(self.mlp_norm(x), step_idx)
-            x = x + mask * self.attn_scale[None, None, :] * self.dropout(attn_out) \
-                  + mask * self.mlp_scale[None, None, :] * self.dropout(mlp_out)
+            x = x + mask * self.attn_scale[None, None, :] * _dropout(attn_out) \
+                  + mask * self.mlp_scale[None, None, :] * _dropout(mlp_out)
         else:
             attn_out = self.attn(self.attn_norm(x), step_idx)
-            x = x + mask * self.attn_scale[None, None, :] * self.dropout(attn_out)
-            x = x + mask * self.mlp_scale[None, None, :] * self.dropout(self.mlp(self.mlp_norm(x), step_idx))
+            x = x + mask * self.attn_scale[None, None, :] * _dropout(attn_out)
+            x = x + mask * self.mlp_scale[None, None, :] * _dropout(self.mlp(self.mlp_norm(x), step_idx))
         return x
 
 
