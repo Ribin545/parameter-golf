@@ -18,7 +18,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import sentencepiece as spm
 
 # Modular Imports
-from model import GPT, GPTStageRepeat
+from model import GPT
 from model_multilayer import GPTMultiLayer
 from data_utils import DistributedTokenLoader
 from optimizer_utils import Muon, ShampooLite, Lion
