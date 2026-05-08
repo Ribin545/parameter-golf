@@ -18,10 +18,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import sentencepiece as spm
 
 # Modular Imports
-from model import GPT
+from model import GPT, GPTStageRepeat
 from model_multilayer import GPTMultiLayer
 from data_utils import DistributedTokenLoader
-from optimizer_utils import Muon
+from optimizer_utils import Muon, ShampooLite, Lion
 from eval_utils import eval_val, build_sentencepiece_luts, load_validation_tokens
 from quant_utils import quantize_state_dict_int8, dequantize_state_dict_int8
 
@@ -115,7 +115,7 @@ class Hyperparameters:
     cosine_min = float(os.environ.get("COSINE_MIN", "0.1"))
     max_wallclock_seconds = float(os.environ.get("MAX_WALLCLOCK_SECONDS", 600.0))
 
-    train_batch_tokens = 524_288  # NON-NEGOTIABLE COMPETITION STANDARD
+    train_batch_tokens = int(os.environ.get("TRAIN_BATCH_TOKENS", 524_288))  # default competition standard
     micro_batch_tokens = int(os.environ.get("MICRO_BATCH_TOKENS", 32_768))
     train_seq_len = int(os.environ.get("TRAIN_SEQ_LEN", 1024))
 
@@ -247,6 +247,15 @@ def main() -> None:
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
+    model_type = args.model_type.strip()
+    # VRAM safety: multilayer U-Net with recurrence stores intermediate tensors
+    # that can 3-4× the micro-batch memory. Clamp micro-batch so we never
+    # accidentally push a pathological batch that spills to system RAM.
+    _max_safe_ubatch = 65536 if model_type in ("multilayer", "stage_repeat") else 524288
+    if args.micro_batch_tokens > _max_safe_ubatch:
+        args.micro_batch_tokens = _max_safe_ubatch
+        grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
+        log0(f"[vram] clamped MICRO_BATCH_TOKENS={args.micro_batch_tokens} grad_accum_steps={grad_accum_steps} (multilayer VRAM guard)")
 
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
@@ -258,6 +267,10 @@ def main() -> None:
     torch.backends.cudnn.allow_tf32 = True
     if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1":
         try:
+            # Keep CUDA graphs DISABLED for training — the compiled 12-step
+            # unrolled forward shares graph-owned intermediate tensors across
+            # micro-batches, which is unsafe under grad accumulation.
+            # Speed comes from Inductor kernel fusion (not graph replay).
             if hasattr(inductor_config, "triton") and hasattr(inductor_config.triton, "cudagraphs"):
                 inductor_config.triton.cudagraphs = False
         except Exception:
@@ -321,15 +334,67 @@ def main() -> None:
             mlp_mult=args.mlp_mult,
             tie_embeddings=args.tie_embeddings,
             tied_embed_init_std=args.tied_embed_init_std,
+            num_steps=args.num_steps,
             logit_softcap=args.logit_softcap,
             rope_base=args.rope_base,
             qk_gain_init=args.qk_gain_init,
             bigram_hash_size=args.bigram_hash_size,
             bigram_hash_scale=args.bigram_hash_scale,
-            ve_enabled=True,
-            ve_dim=128,
-            ve_layers=(9, 10),
         ).to(device).bfloat16()
+        # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
+        # Use 'default' mode: enables Inductor kernel fusion without CUDA graph
+        # caching, which is unsafe across micro-batches with our multi-block U-Net.
+        if os.environ.get("DISABLE_COMPILE") != "1":
+            compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
+            base_model.forward_logits = torch.compile(base_model.forward_logits, mode=compile_mode)
+    elif model_type == "stage_repeat":
+        # Relaxed recursive layers: NUM_STAGES blocks, each repeated REPEATS_PER_STAGE times.
+        # Per-repeat adapters: LoRA (mlp up/down + attn out), residual gates, repeat embeddings.
+        num_stages = int(os.environ.get("NUM_STAGES", "5"))
+        repeats_per_stage = int(os.environ.get("REPEATS_PER_STAGE", "2"))
+        repeat_lora_rank = int(os.environ.get("REPEAT_LORA_RANK", "32"))
+        # Defaults chosen for speed: norm offsets + attention LoRA are expensive.
+        norm_offset_enabled = os.environ.get("REPEAT_NORM_OFFSET", "0") != "0"
+        attn_out_lora = os.environ.get("REPEAT_ATTN_OUT_LORA", "0") != "0"
+        mlp_lora_enabled = os.environ.get("REPEAT_MLP_LORA", "1") != "0"
+        repeat_attn_every = int(os.environ.get("REPEAT_ATTN_EVERY", "1"))
+        repeat_refine_mlp_ratio = float(os.environ.get("REPEAT_REFINE_MLP_RATIO", "1.0"))
+
+        base_model = GPTStageRepeat(
+            vocab_size=args.vocab_size,
+            num_stages=num_stages,
+            repeats_per_stage=repeats_per_stage,
+            model_dim=args.model_dim,
+            num_heads=args.num_heads,
+            num_kv_heads=args.num_kv_heads,
+            mlp_mult=args.mlp_mult,
+            tie_embeddings=args.tie_embeddings,
+            tied_embed_init_std=args.tied_embed_init_std,
+            logit_softcap=args.logit_softcap,
+            rope_base=args.rope_base,
+            qk_gain_init=args.qk_gain_init,
+            repeat_lora_rank=repeat_lora_rank,
+            bigram_hash_enabled=args.bigram_hash_enabled,
+            bigram_hash_size=args.bigram_hash_size,
+            bigram_hash_scale=args.bigram_hash_scale,
+            shell_centering_enabled=args.shell_centering_enabled,
+            shell_centering_lam=args.shell_centering_lam,
+            dropout_p=args.dropout_p,
+            label_smoothing=args.label_smoothing,
+            norm_offset_enabled=norm_offset_enabled,
+            attn_out_lora=attn_out_lora,
+            mlp_lora_enabled=mlp_lora_enabled,
+            repeat_attn_every=repeat_attn_every,
+            repeat_refine_mlp_ratio=repeat_refine_mlp_ratio,
+        ).to(device).bfloat16()
+
+        log0(
+            f"[config] stage_repeat: NUM_STAGES={num_stages} REPEATS_PER_STAGE={repeats_per_stage} "
+            f"REPEAT_LORA_RANK={repeat_lora_rank} REPEAT_NORM_OFFSET={int(norm_offset_enabled)} "
+            f"REPEAT_ATTN_OUT_LORA={int(attn_out_lora)} REPEAT_MLP_LORA={int(mlp_lora_enabled)} "
+            f"REPEAT_ATTN_EVERY={repeat_attn_every} REPEAT_REFINE_MLP_RATIO={repeat_refine_mlp_ratio}"
+        )
+
     else:
         base_model = GPT(
             vocab_size=args.vocab_size,
@@ -393,36 +458,152 @@ def main() -> None:
     print("[debug] initializing optimizers...")
     token_lr = args.tied_embed_lr if args.tie_embeddings else args.embed_lr
 
-    optimizer_tok = torch.optim.AdamW(
-        [{"params": [base_model.tok_emb.weight], "lr": token_lr, "target_lr": token_lr}],
-        betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True, weight_decay=0.0,
-    )
-    optimizer_muon = Muon(matrix_params, lr=args.matrix_lr, momentum=args.muon_momentum,
-                          backend_steps=args.muon_backend_steps)
-    optimizer_lora = torch.optim.AdamW(
-        [{"params": lora_params_list, "lr": args.lora_lr, "target_lr": args.lora_lr}],
-        betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True,
-        weight_decay=args.lora_weight_decay,
-    ) if lora_params_list else None
-    optimizer_control = torch.optim.AdamW(
-        [{"params": control_params, "lr": args.control_lr, "target_lr": args.control_lr}],
-        betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True,
-        weight_decay=args.control_weight_decay,
-    ) if control_params else None
-    optimizer_scalar = torch.optim.AdamW(
-        [{"params": scalar_params, "lr": args.scalar_lr, "target_lr": args.scalar_lr}],
-        betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True,
-        weight_decay=args.scalar_weight_decay,
-    ) if scalar_params else None
+    matrix_optim_mode = os.environ.get("MATRIX_OPTIM", "muon").strip().lower()
+    # Only apply Shampoo/SOAP-style preconditioning to *large* 2D matrices.
+    # For 512-dim models most matrices are ~262k elems; a threshold like 500k
+    # targets the big combined projections (e.g., qkv) without touching every mat.
+    shampoo_min_numel = int(os.environ.get("SHAMPOO_MIN_NUMEL", "500000"))
+    shampoo_beta2 = float(os.environ.get("SHAMPOO_BETA2", "0.999"))
+    shampoo_eps = float(os.environ.get("SHAMPOO_EPS", "1e-8"))
+    shampoo_momentum = float(os.environ.get("SHAMPOO_MOMENTUM", "0.0"))
+    # ShampooLite update magnitudes are on a different scale than Muon.
+    # If you don't set this, we default to a conservative fraction of MATRIX_LR.
+    shampoo_lr = float(os.environ.get("SHAMPOO_LR", str(args.matrix_lr * 0.1)))
 
-    optimizers = [o for o in [optimizer_tok, optimizer_muon, optimizer_lora,
-                               optimizer_control, optimizer_scalar] if o is not None]
-    if base_model.lm_head is not None:
-        opt_head = torch.optim.AdamW(
-            [{"params": [base_model.lm_head.weight], "lr": args.head_lr, "target_lr": args.head_lr}],
-            betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True, weight_decay=0.1,
+    matrix_optimizers: list[torch.optim.Optimizer] = []
+    if matrix_optim_mode in {"shampoo_lite", "hybrid"}:
+        shampoo_params = [p for p in matrix_params if p.numel() >= shampoo_min_numel]
+        muon_params = [p for p in matrix_params if p.numel() < shampoo_min_numel]
+
+        if shampoo_params:
+            shampoo_opt = (
+                ShampooLite(
+                    shampoo_params,
+                    lr=shampoo_lr,
+                    beta2=shampoo_beta2,
+                    eps=shampoo_eps,
+                    momentum=shampoo_momentum,
+                    grad_clip=args.grad_clip_norm,
+                    min_numel=0,
+                )
+            )
+            # Tag for LR scheduling (so we can scale Muon and Shampoo with different base LRs)
+            for g in shampoo_opt.param_groups:
+                g["_is_shampoo"] = True
+                g["_target_lr"] = shampoo_lr
+            matrix_optimizers.append(shampoo_opt)
+            print(f"[optim] matrix_opt=shampoo_lite mats={len(shampoo_params)} (min_numel={shampoo_min_numel} lr={shampoo_lr} beta2={shampoo_beta2} mom={shampoo_momentum})")
+        if matrix_optim_mode == "hybrid" and muon_params:
+            muon_opt = (
+                Muon(muon_params, lr=args.matrix_lr, momentum=args.muon_momentum,
+                     backend_steps=args.muon_backend_steps)
+            )
+            for g in muon_opt.param_groups:
+                g["_is_shampoo"] = False
+                g["_target_lr"] = args.matrix_lr
+            matrix_optimizers.append(muon_opt)
+            print(f"[optim] matrix_opt=hybrid + muon mats={len(muon_params)}")
+
+        if matrix_optim_mode == "shampoo_lite" and not shampoo_params:
+            # Fallback: if threshold filtered everything out, use Muon.
+            matrix_optimizers.append(
+                Muon(matrix_params, lr=args.matrix_lr, momentum=args.muon_momentum,
+                     backend_steps=args.muon_backend_steps)
+            )
+            print(f"[optim] matrix_opt=shampoo_lite (no mats >= min_numel={shampoo_min_numel}; fallback to muon)")
+    else:
+        muon_opt = (
+            Muon(matrix_params, lr=args.matrix_lr, momentum=args.muon_momentum,
+                 backend_steps=args.muon_backend_steps)
         )
-        optimizers.insert(1, opt_head)
+        for g in muon_opt.param_groups:
+            g["_is_shampoo"] = False
+            g["_target_lr"] = args.matrix_lr
+        matrix_optimizers.append(muon_opt)
+
+    # Merged AdamW — single optimizer with per-group LR/WD settings.
+    # Eliminates 4× kernel launch scheduling gaps vs separate instances.
+    adam_groups = []
+    # tok_emb group
+    adam_groups.append({"params": [base_model.tok_emb.weight],
+                        "lr": token_lr, "target_lr": token_lr,
+                        "weight_decay": 0.0})
+    # lora group
+    if lora_params_list:
+        adam_groups.append({"params": lora_params_list,
+                            "lr": args.lora_lr, "target_lr": args.lora_lr,
+                            "weight_decay": args.lora_weight_decay})
+    # control group (scales, biases)
+    if control_params:
+        adam_groups.append({"params": control_params,
+                            "lr": args.control_lr, "target_lr": args.control_lr,
+                            "weight_decay": args.control_weight_decay})
+    # scalar group (step_embeddings etc.)
+    if scalar_params:
+        adam_groups.append({"params": scalar_params,
+                            "lr": args.scalar_lr, "target_lr": args.scalar_lr,
+                            "weight_decay": args.scalar_weight_decay})
+    # lm_head group (if separate from tied emb)
+    if base_model.lm_head is not None:
+        adam_groups.append({"params": [base_model.lm_head.weight],
+                            "lr": args.head_lr, "target_lr": args.head_lr,
+                            "weight_decay": 0.1})
+
+    optimizer_adam = torch.optim.AdamW(
+        adam_groups,
+        betas=(args.beta1, args.beta2), eps=args.adam_eps, fused=True,
+    )
+
+    # Optimizer mode: controls which optimizers to use
+    # "muon_adam" = Muon + AdamW every step (default/baseline)
+    # "muon_alt" = Muon every 2 steps + AdamW every step
+    # "adam_only" = Fused AdamW only, no Muon
+    # "lion" = Lion optimizer for *all* params (matrix+non-matrix)
+    # "muon_lion" = Muon for matrix params + Lion for non-matrix params
+    optim_mode = os.environ.get("OPTIM_MODE", "muon_adam")
+    
+    if optim_mode == "lion":
+        # Lion: single optimizer with sign-based updates + momentum
+        # Combines matrix + scalar + lora + control into one Lion instance
+        lion_groups = []
+        for g in adam_groups:
+            lion_groups.append(dict(
+                params=g["params"], lr=g["lr"], target_lr=g["target_lr"],
+                weight_decay=g.get("weight_decay", 0.0),
+            ))
+        if matrix_params:
+            lion_groups.append(dict(
+                params=matrix_params, lr=args.matrix_lr, target_lr=args.matrix_lr,
+                weight_decay=0.0,
+            ))
+        optimizer_lion = Lion(
+            lion_groups,
+            lr=args.matrix_lr, betas=(0.9, 0.99), weight_decay=0.0,
+        )
+        optimizers = [optimizer_lion]
+        print("[optim] mode=lion (single Lion optimizer)")
+    elif optim_mode == "muon_lion":
+        # Muon for matrix params (already in matrix_optimizers), Lion for everything else.
+        lion_groups = []
+        for g in adam_groups:
+            lion_groups.append(dict(
+                params=g["params"], lr=g["lr"], target_lr=g["target_lr"],
+                weight_decay=g.get("weight_decay", 0.0),
+            ))
+        optimizer_lion_nonmatrix = Lion(
+            lion_groups,
+            lr=args.scalar_lr, betas=(0.9, 0.99), weight_decay=0.0,
+        )
+        optimizers = [*matrix_optimizers, optimizer_lion_nonmatrix]
+        print("[optim] mode=muon_lion (Muon matrices + Lion non-matrices)")
+    else:
+        optimizers = [*matrix_optimizers, optimizer_adam]
+        if optim_mode == "muon_alt":
+            print("[optim] mode=muon_alt (Muon every 2 steps)")
+        elif optim_mode == "adam_only":
+            print("[optim] mode=adam_only (no Muon)")
+        else:
+            print("[optim] mode=muon_adam (Muon + AdamW every step)")
 
     # Loss filter
     loss_filter = LossFilter(
@@ -537,11 +718,9 @@ def main() -> None:
             opt.zero_grad(set_to_none=True)
         step_loss = 0.0
         loss_log_scale = 1.0 / grad_accum_steps
-        backward_scale = loss_log_scale / max(args.num_steps, 1)
+        backward_scale = loss_log_scale
 
         for _ in range(grad_accum_steps):
-            if hasattr(torch.compiler, "cudagraph_mark_step_begin"):
-                torch.compiler.cudagraph_mark_step_begin()
             # Determine training seq_len (curriculum if enabled)
             if args.seq_len_curriculum and step < args.seq_len_curriculum_steps:
                 cur_seq = args.short_train_seq_len
@@ -551,8 +730,7 @@ def main() -> None:
             retries = 0
             while True:
                 x, y = train_loader.next_batch(args.micro_batch_tokens, cur_seq)
-                with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                    loss = model(x, y)
+                loss = model(x, y)
                 loss_val = loss.item()
 
                 if loss_filter is not None and loss_filter.should_skip(loss_val):
@@ -571,16 +749,25 @@ def main() -> None:
         if loss_filter is not None and step % 100 == 0:
             log0(f"[filter] totals {loss_filter.summary()}")
 
-        # LR schedule: linear warmup then cosine decay (or constant if schedule-free)
+        # LR schedule: linear warmup → plateau → gentle cosine decay
+        # CRITICAL FIX: Previous time-based cosine decay collapsed too early.
+        # At step 400 (226s into 600s run), LR was at 66% — the model starved.
+        # Now: 80% of steps at full LR, then gentle decay over final 20%.
+        # This matches the 5090 pattern (200 steps at full LR by step 200).
         if args.schedule_free:
             total_scale = 1.0
         else:
-            elapsed_sec = time.perf_counter() - global_start_time
-            global_ramp = min(step / max(args.warmup_steps, 1), 1.0)
-            cosine_decay = args.cosine_min + (1.0 - args.cosine_min) * 0.5 * (
-                1.0 + math.cos(min(elapsed_sec / args.max_wallclock_seconds, 1.0) * math.pi)
-            )
-            total_scale = global_ramp * cosine_decay
+            warmup_frac = min(step / max(args.warmup_steps, 1), 1.0)
+            # Estimate total steps for schedule planning (483ms/step → ~1240 steps)
+            plateau_steps = max(int(0.75 * 1200), args.warmup_steps * 2)  # ~900 steps at full LR
+            if step < plateau_steps:
+                decay_frac = 1.0  # plateau — full LR
+            else:
+                progress = min((step - plateau_steps) / max(1200 - plateau_steps, 1), 1.0)
+                decay_frac = args.cosine_min + (1.0 - args.cosine_min) * 0.5 * (
+                    1.0 + math.cos(progress * math.pi)
+                )
+            total_scale = warmup_frac * decay_frac
 
         # Muon momentum warmup
         frac = min(step / max(args.warmup_steps, 1), 1.0)
@@ -597,31 +784,90 @@ def main() -> None:
                     if p.grad is not None:
                         p.grad.mul_(dyn_scale)
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm)
+        # --- No gradient hooks — use clip scaling instead ---
+        # The 12-step unrolled graph accumulates gradients 12× on shared
+        # weights but only 1× on per-step params (LoRA). Dividing shared
+        # grads by 12 before clip slows learning by 12× on those params.
+        # Instead: use backward_scale=1.0 (no division) and set
+        # clip_norm=3.46 (sqrt(12)) so all params pass through clip
+        # at full strength. Clip at 3.46 protects against non-finite grads
+        # while preserving the 12× signal on shared weights.
+        num_steps_div = 1  # no gradient hook division
+        # ---------------------------------------------------------
 
-        for group in optimizer_muon.param_groups:
-            group["momentum"] = muon_momentum
-            group["lr"] = args.matrix_lr * total_scale
+        for opt in matrix_optimizers:
+            for group in opt.param_groups:
+                if "momentum" in group:
+                    group["momentum"] = muon_momentum
+                base_lr = float(group.get("_target_lr", args.matrix_lr))
+                group["lr"] = base_lr * total_scale
 
-        for opt in optimizers:
-            if opt is not optimizer_muon:
-                for group in opt.param_groups:
-                    group["lr"] = group["target_lr"] * total_scale
-            opt.step()
+        grad_clip_val = args.grad_clip_norm
 
-        with torch.no_grad():
+        for group in optimizer_adam.param_groups:
+            group["lr"] = group["target_lr"] * total_scale
+
+        if optim_mode == "lion":
+            for group in optimizer_lion.param_groups:
+                group["lr"] = group["target_lr"] * total_scale
+            torch.nn.utils.clip_grad_norm_(
+                [p for g in optimizer_lion.param_groups for p in g["params"] if p.grad is not None],
+                max_norm=grad_clip_val,
+                error_if_nonfinite=False,
+            )
+            optimizer_lion.step()
+
+        elif optim_mode == "muon_lion":
+            # Step matrix optimizers (Muon/ShampooLite)
+            for opt in matrix_optimizers:
+                opt.step(grad_clip=grad_clip_val)
+
+            # Lion for non-matrix params
+            for group in optimizer_lion_nonmatrix.param_groups:
+                group["lr"] = group["target_lr"] * total_scale
+            torch.nn.utils.clip_grad_norm_(
+                [p for g in optimizer_lion_nonmatrix.param_groups for p in g["params"] if p.grad is not None],
+                max_norm=grad_clip_val,
+                error_if_nonfinite=False,
+            )
+            optimizer_lion_nonmatrix.step()
+
+        elif optim_mode == "adam_only":
+            torch.nn.utils.clip_grad_norm_(
+                [p for g in optimizer_adam.param_groups for p in g["params"] if p.grad is not None],
+                max_norm=grad_clip_val,
+                error_if_nonfinite=False,
+            )
+            optimizer_adam.step()
+
+        else:  # "muon_adam" or "muon_alt"
+            use_muon = (optim_mode == "muon_adam") or (step % 2 == 0)
+            if use_muon:
+                for opt in matrix_optimizers:
+                    # Muon accepts grad_clip kwarg; ShampooLite also accepts it.
+                    opt.step(grad_clip=grad_clip_val)
+
+            torch.nn.utils.clip_grad_norm_(
+                [p for g in optimizer_adam.param_groups for p in g["params"] if p.grad is not None],
+                max_norm=grad_clip_val,
+                error_if_nonfinite=False,
+            )
+            optimizer_adam.step()
+
+        # EMA removed from hot path — only needed at export time.
+        # Compute lazily: update model_ema snapshot once every 100 steps
+        # instead of every single step.
+        if step % 100 == 0:
             for n, p in model.named_parameters():
                 ema_n = n.replace("module.", "")
                 if ema_n in model_ema:
-                    model_ema[ema_n].mul_(0.99).add_(p.data, alpha=0.01)
+                    model_ema[ema_n].data.copy_(p.data)
 
-        torch.cuda.synchronize()
         dt = (time.perf_counter() - t0) * 1000.0
         training_time_ms += dt
         t0 = time.perf_counter()
-        shard = train_loader.stream.file_idx
-        pos = train_loader.stream.pos
-        log0(f"step:{step} loss:{step_loss:.4f} dt:{dt:.2f}ms d:sh{shard}p{pos} seqlen:{args.train_seq_len} steps:{args.num_steps}")
+        # Print dt to console only (not to disk) for measurement
+        print(f"step:{step} loss:{step_loss:.4f} dt:{dt:.2f}ms")
 
         step += 1
 

@@ -48,10 +48,10 @@ fi
 echo "[bootstrap] Installing Python dependencies..."
 pip install -r requirements.txt --quiet
 
-# --- Step 3: Run AB test ---
-echo "[bootstrap] Launching AB test..."
-chmod +x run_ab_test.sh
-./run_ab_test.sh
+# --- Step 3: Run 5090 throughput training ---
+echo "[bootstrap] Launching 5090 throughput training..."
+chmod +x trial_5090.sh
+./trial_5090.sh
 
 echo ""
 echo "=========================================="
