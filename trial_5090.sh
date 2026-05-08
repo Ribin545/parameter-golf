@@ -47,9 +47,9 @@ fi
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=5
 export MODEL_DIM=384
-export NUM_HEADS=4
-export NUM_KV_HEADS=2
-export MLP_MULT=1
+export NUM_HEADS=6
+export NUM_KV_HEADS=3
+export MLP_MULT=3
 export RECURRENCE_STEPS=2
 
 # =============================================================================
@@ -111,13 +111,13 @@ export TIED_EMBED_INIT_STD=0.005
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.15
-export LABEL_SMOOTHING=0.05
+export DROPOUT_P=0.25
+export LABEL_SMOOTHING=0.1
 
 # =============================================================================
 # Scheduler + stopping
 # =============================================================================
-export WARMUP_STEPS=16
+export WARMUP_STEPS=32
 export VAL_LOSS_EVERY=200
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
