@@ -27,9 +27,18 @@ export DATA_PATH="${DATA_PATH:-${SCRIPT_DIR}/data/datasets/fineweb10B_sp1024}"
 export TOKENIZER_PATH="${TOKENIZER_PATH:-${SCRIPT_DIR}/data/tokenizers/fineweb_1024_bpe.model}"
 
 if [ ! -d "$DATA_PATH" ]; then
-    echo "[ERROR] Dataset not found at: $DATA_PATH"
-    echo "  Run bootstrap_runpod.sh first, or download manually."
-    exit 1
+    echo "[setup] Dataset not found. Downloading FineWeb-10B (sp1024) ..."
+    echo "[setup] This is ~20 GB and may take 5-15 minutes."
+    
+    if [ ! -d /tmp/pg ]; then
+        git clone --depth 1 https://github.com/openai/parameter-golf.git /tmp/pg
+    fi
+    python3 /tmp/pg/data/cached_challenge_fineweb.py --variant sp1024
+    mkdir -p "$SCRIPT_DIR/data/datasets" "$SCRIPT_DIR/data/tokenizers"
+    cp -r /tmp/pg/data/datasets/fineweb10B_sp1024 "$SCRIPT_DIR/data/datasets/"
+    cp /tmp/pg/data/tokenizers/fineweb_1024_bpe.model "$SCRIPT_DIR/data/tokenizers/"
+    
+    echo "[setup] Dataset download complete."
 fi
 
 # =============================================================================
