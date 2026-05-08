@@ -49,7 +49,7 @@ export NUM_LAYERS=5
 export MODEL_DIM=384
 export NUM_HEADS=6
 export NUM_KV_HEADS=3
-export MLP_MULT=3
+export MLP_MULT=2
 export RECURRENCE_STEPS=2
 
 # =============================================================================
@@ -74,12 +74,12 @@ export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.06
 export MUON_BACKEND_STEPS=3
-export MUON_MOMENTUM=0.95
+export MUON_MOMENTUM=0.90
 
 # =============================================================================
 # Weight decay
 # =============================================================================
-export SCALAR_WEIGHT_DECAY=0.1
+export SCALAR_WEIGHT_DECAY=0.2
 export LORA_WEIGHT_DECAY=0.0
 export CONTROL_WEIGHT_DECAY=0.0
 
@@ -104,15 +104,15 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=2048
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
-export SHELL_CENTERING_LAM=0.008
+export SHELL_CENTERING_LAM=0.02
 export TIE_EMBEDDINGS=1
 export TIED_EMBED_INIT_STD=0.005
 
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.25
-export LABEL_SMOOTHING=0.1
+export DROPOUT_P=0.4
+export LABEL_SMOOTHING=0.15
 
 # =============================================================================
 # Scheduler + stopping
