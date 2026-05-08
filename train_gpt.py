@@ -831,7 +831,10 @@ def main() -> None:
         elif optim_mode == "muon_lion":
             # Step matrix optimizers (Muon/ShampooLite)
             for opt in matrix_optimizers:
-                opt.step(grad_clip=grad_clip_val)
+                try:
+                    opt.step(grad_clip=grad_clip_val)
+                except TypeError:
+                    opt.step()
 
             # Lion for non-matrix params
             for group in optimizer_lion_nonmatrix.param_groups:
@@ -855,8 +858,10 @@ def main() -> None:
             use_muon = (optim_mode == "muon_adam") or (step % 2 == 0)
             if use_muon:
                 for opt in matrix_optimizers:
-                    # Muon accepts grad_clip kwarg; ShampooLite also accepts it.
-                    opt.step(grad_clip=grad_clip_val)
+                    try:
+                        opt.step(grad_clip=grad_clip_val)
+                    except TypeError:
+                        opt.step()
 
             torch.nn.utils.clip_grad_norm_(
                 [p for g in optimizer_adam.param_groups for p in g["params"] if p.grad is not None],
