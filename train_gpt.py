@@ -253,20 +253,29 @@ def main() -> None:
     local_rank = int(os.environ.get("LOCAL_RANK", "0"))
     grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
     model_type = args.model_type.strip()
-    # VRAM safety: multilayer U-Net with recurrence stores intermediate tensors
-    # that can 3-4× the micro-batch memory. Clamp micro-batch so we never
-    # accidentally push a pathological batch that spills to system RAM.
-    _max_safe_ubatch = 65536 if model_type in ("multilayer", "stage_repeat") else 524288
-    if args.micro_batch_tokens > _max_safe_ubatch:
-        args.micro_batch_tokens = _max_safe_ubatch
-        grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
-        log0(f"[vram] clamped MICRO_BATCH_TOKENS={args.micro_batch_tokens} grad_accum_steps={grad_accum_steps} (multilayer VRAM guard)")
 
     device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
     if distributed:
         dist.init_process_group(backend="nccl", device_id=device)
     master_process = rank == 0
+
+    # VRAM safety: multilayer U-Net with recurrence stores intermediate tensors
+    # that can 3-4× the micro-batch memory. Clamp micro-batch based on actual GPU memory.
+    _gpu_mem_gib = torch.cuda.get_device_properties(device).total_memory / (1024**3)
+    if model_type in ("multilayer", "stage_repeat"):
+        if _gpu_mem_gib >= 30:       # 5090 (32GB) or A6000 (48GB)
+            _max_safe_ubatch = 262144
+        elif _gpu_mem_gib >= 22:     # 3090/4090 (24GB)
+            _max_safe_ubatch = 65536
+        else:                         # lower VRAM GPUs
+            _max_safe_ubatch = 32768
+    else:
+        _max_safe_ubatch = 524288
+    if args.micro_batch_tokens > _max_safe_ubatch:
+        args.micro_batch_tokens = _max_safe_ubatch
+        grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
+        log0(f"[vram] clamped MICRO_BATCH_TOKENS={args.micro_batch_tokens} grad_accum_steps={grad_accum_steps} (GPU={_gpu_mem_gib:.0f}GiB, max_safe={_max_safe_ubatch})")
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
