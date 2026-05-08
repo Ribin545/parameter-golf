@@ -21,7 +21,12 @@ import sentencepiece as spm
 from model import GPT
 from model_multilayer import GPTMultiLayer
 from data_utils import DistributedTokenLoader
-from optimizer_utils import Muon, ShampooLite, Lion
+try:
+    from optimizer_utils import Muon, ShampooLite, Lion
+except ImportError:
+    from optimizer_utils import Muon
+    ShampooLite = None
+    Lion = None
 from eval_utils import eval_val, build_sentencepiece_luts, load_validation_tokens
 from quant_utils import quantize_state_dict_int8, dequantize_state_dict_int8
 
