@@ -265,6 +265,12 @@ def main() -> None:
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    # --- Linux/Ampere+ optimisations ---
+    torch.backends.cuda.enable_flash_sdp(True)
+    torch.backends.cuda.enable_mem_efficient_sdp(True)
+    torch.backends.cuda.enable_math_sdp(False)
+    torch.set_float32_matmul_precision("high")
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
     if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1":
         try:
             # Keep CUDA graphs DISABLED for training — the compiled 12-step
