@@ -51,6 +51,7 @@ export NUM_HEADS=6
 export NUM_KV_HEADS=3
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
+export MULTILAYER_LORA_RANK=4
 
 # =============================================================================
 # Batch: 524k tokens/step — best throughput on 32GB 5090
