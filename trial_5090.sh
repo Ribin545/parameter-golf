@@ -51,7 +51,7 @@ export NUM_HEADS=6
 export NUM_KV_HEADS=3
 export MLP_MULT=1
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=256
+export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
 # Batch: 524k tokens/step — micro-batch reduced for VRAM safety (618 MB headroom)
