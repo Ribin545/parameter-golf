@@ -66,19 +66,19 @@ export TRAIN_SEQ_LEN=1024
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
 export MATRIX_LR=0.242
-export SCALAR_LR=0.06
-export LORA_LR=0.06
-export CONTROL_LR=0.06
+export SCALAR_LR=0.12
+export LORA_LR=0.12
+export CONTROL_LR=0.12
 export EMBED_LR=0.6
-export HEAD_LR=0.016
-export TIED_EMBED_LR=0.06
+export HEAD_LR=0.032
+export TIED_EMBED_LR=0.12
 export MUON_BACKEND_STEPS=6
 export MUON_MOMENTUM=0.99
 
 # =============================================================================
 # Weight decay
 # =============================================================================
-export SCALAR_WEIGHT_DECAY=0.2
+export SCALAR_WEIGHT_DECAY=0.0
 export LORA_WEIGHT_DECAY=0.0
 export CONTROL_WEIGHT_DECAY=0.0
 
