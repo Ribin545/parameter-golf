@@ -92,10 +92,9 @@ export GRAD_CLIP_NORM=1.0
 export QK_GAIN_INIT=1.5
 
 # =============================================================================
-# torch.compile — enabled by default (Rotary is compile-safe)
-# Set DISABLE_COMPILE=1 to skip for debugging
+# torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
 # =============================================================================
-# export DISABLE_COMPILE=1  # uncomment to disable
+export DISABLE_COMPILE=1
 
 # =============================================================================
 # Features (quality knobs — cheap enough to keep)

@@ -39,16 +39,20 @@ fi
 echo "[bootstrap] Repo HEAD: $(git rev-parse --short HEAD)"
 ls -1
 
-if [ ! -f run_ab_test.sh ]; then
-    echo "[bootstrap][fatal] run_ab_test.sh missing after checkout"
+if [ ! -f trial_5090.sh ]; then
+    echo "[bootstrap][fatal] trial_5090.sh missing after checkout"
     exit 1
 fi
 
-# --- Step 2: Install dependencies ---
+# --- Step 2: Install PyTorch with pinned version ---
+echo "[bootstrap] Installing PyTorch 2.5.1 (CUDA 12.4)..."
+pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124 --quiet
+
+# --- Step 3: Install remaining dependencies ---
 echo "[bootstrap] Installing Python dependencies..."
 pip install -r requirements.txt --quiet
 
-# --- Step 3: Run 5090 throughput training ---
+# --- Step 4: Run 5090 throughput training ---
 echo "[bootstrap] Launching 5090 throughput training..."
 chmod +x trial_5090.sh
 ./trial_5090.sh
