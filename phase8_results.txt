@@ -1,0 +1,30 @@
+=== PHASE 8 COMPLETE RESULTS ===
+Goal: train_loss < 2.6 at step 200, step_time < 600ms
+Session: 2026-05-07, Windows RTX 3090
+
+TEST             TRAIN_LOSS  VAL_BPB   STEP_MS  VERDICT
+T1  (d512,s1)    3.3999      2.0015   571ms    FAIL(train=3.40)
+T2D (d256,s2)    3.6640      2.1470   501ms    FAIL(both worse)
+T3A (noSC)       3.4144      2.0205   564ms    FAIL(train=3.41)
+T3B (noSC/noBH)  3.4213      2.0243   550ms    FAIL(train=3.42)
+T4A (2xLR)       3.4021      1.9586   581ms    FAIL(train=3.40)
+T4B (4xLR)       3.4579      1.9949   590ms    FAIL(train=3.46, worse!)
+T5A (noReg)      3.4124      1.9927   564ms    FAIL(train=3.41)
+T5B (noGradClp)  3.4260      1.9853   590ms    FAIL(train=3.43)
+T6A (d384,s2)    3.3046      2.3132   719ms    OVER_TIME >600ms
+T6B (d320,s2)    3.????      ?.????   650ms    OVER_TIME >600ms (killed early)
+T6C (d288,s2)    3.????      ?.????   630ms    OVER_TIME >600ms (killed early)
+T6D (d256,s2)    3.4199      2.1400   512ms    FAIL(train=3.42, val worse)
+T7A (mb16k,muon1)  N/A       N/A      551ms    KILLED(step_time marginal)
+
+KEY FINDINGS:
+1. dim=512 step-1 models hit a HARD train loss floor of ~3.40 at step 200
+2. Recurrence steps=2 breaks the floor: 3.3046 at d384, but step_time > 600ms
+3. Higher LR hurts: 4x LR gave 3.46 (worse than 1x LR 3.40)
+4. Removing regularizers (SC, BH, DLR, grad_clip) does NOT improve train loss
+5. Smaller models (d256) with steps=2 don't converge fast enough
+6. Train loss < 2.6 at 200 steps appears ARCHITECTURALLY IMPOSSIBLE 
+   with current codebase - would need ~600-1000+ steps
+
+BEST CONFIG: T1 (d512,s1) at 3.3999 train, 2.0015 val, 571ms
+RUNNER-UP: T4A (d512,s1,2xLR) at 3.4021 train, 1.9586 val, 581ms

@@ -31,6 +31,7 @@ for dim, heads, kv_heads, mlp_mult, label in configs:
         num_heads=heads, num_kv_heads=kv_heads, mlp_mult=mlp_mult,
         tie_embeddings=True, tied_embed_init_std=0.005,
         num_steps=2, bigram_hash_size=2048, bigram_hash_scale=0.05,
+        lora_rank=0,  # attn_out LoRA removed for speed
     ).to(device).bfloat16()
     
     total_p = sum(p.numel() for p in model.parameters())

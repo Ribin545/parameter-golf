@@ -140,6 +140,9 @@ class Hyperparameters:
     num_layers = int(os.environ.get("NUM_LAYERS", "11"))
     lora_rank = int(os.environ.get("LORA_RANK", 512))
     lora_scope = os.environ.get("LORA_SCOPE", "q")
+    # Multilayer LoRA: separate env var so we can tune independently from recurrent LoRA.
+    # Default 0 = disabled. Set to e.g. 8 to enable rank-8 LoRA on all attention projections.
+    multilayer_lora_rank = int(os.environ.get("MULTILAYER_LORA_RANK", "0"))
 
     # Feature toggles
     bigram_hash_enabled = bool(int(os.environ.get("BIGRAM_HASH_ENABLED", "0")))
@@ -360,6 +363,7 @@ def main() -> None:
             qk_gain_init=args.qk_gain_init,
             bigram_hash_size=args.bigram_hash_size,
             bigram_hash_scale=args.bigram_hash_scale,
+            lora_rank=args.multilayer_lora_rank,
         ).to(device).bfloat16()
         # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
         # Use 'default' mode: enables Inductor kernel fusion without CUDA graph
