@@ -45,7 +45,7 @@ fi
 # Architecture: Multilayer U-Net 5L×2S (384-dim with LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=5
+export NUM_LAYERS=3
 export MODEL_DIM=384
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
