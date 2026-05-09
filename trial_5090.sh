@@ -42,40 +42,39 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 2L×3S (wide two-block with deep recurrence + LoRA)
+# Architecture: Multilayer U-Net 2L×3S (384-dim with deep recurrence + LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=2
-export MODEL_DIM=512
-export NUM_HEADS=8
-export NUM_KV_HEADS=4
+export MODEL_DIM=384
+export NUM_HEADS=6
+export NUM_KV_HEADS=3
 export MLP_MULT=2
 export RECURRENCE_STEPS=3
 export MULTILAYER_LORA_RANK=128
 
 # =============================================================================
-# Batch: 524k tokens/step — best throughput on 32GB 5090
-# micro=65,536 is the safe multilayer VRAM cap (auto-enforced).
-# If your 5090 has extra headroom, try: MICRO_BATCH_TOKENS=131072
+# Batch: 524k tokens/step — larger micro-batch for 5090 headroom
+# micro=131,072 cuts grad_accum from 8→4, reducing overhead.
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-131072}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: Muon + AdamW — the 5090 has VRAM headroom to keep Muon
+# Optimizer: Muon + AdamW — aggressively tuned for fast convergence
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
 export MATRIX_LR=0.12
-export SCALAR_LR=0.015
+export SCALAR_LR=0.03
 export LORA_LR=0.03
-export CONTROL_LR=0.015
+export CONTROL_LR=0.03
 export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
 export MUON_BACKEND_STEPS=3
-export MUON_MOMENTUM=0.90
+export MUON_MOMENTUM=0.95
 
 # =============================================================================
 # Weight decay
