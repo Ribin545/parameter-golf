@@ -53,7 +53,7 @@ python3 -m pip install numpy tqdm huggingface-hub kernels setuptools typing-exte
 echo "[bootstrap] Removing incompatible preinstalled torch packages..."
 python3 -m pip uninstall -y torch torchvision torchaudio >/dev/null 2>&1 || true
 echo "[bootstrap] Installing exact PyTorch nightly cu130 (Blackwell sm_120 support for RTX 5090)..."
-python3 -m pip install --no-cache-dir --force-reinstall torch==2.13.0.dev20260507 torchvision==0.22.0.dev20260507 --index-url https://download.pytorch.org/whl/nightly/cu130
+python3 -m pip install --no-cache-dir --force-reinstall torch==2.13.0.dev20260507 --index-url https://download.pytorch.org/whl/nightly/cu130
 python3 - <<'PY'
 import torch
 print('[bootstrap] torch_check', torch.__version__, 'cuda=', torch.version.cuda)
