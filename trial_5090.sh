@@ -42,23 +42,21 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 2L×3S (384-dim with deep recurrence + LoRA)
+# Architecture: Multilayer U-Net 5L×2S (384-dim with minimal MLP for speed)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=2
+export NUM_LAYERS=5
 export MODEL_DIM=384
 export NUM_HEADS=6
 export NUM_KV_HEADS=3
-export MLP_MULT=2
-export RECURRENCE_STEPS=3
+export MLP_MULT=1
+export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=128
 
 # =============================================================================
-# Batch: 524k tokens/step — single micro-batch (no grad accumulation overhead)
-# VRAM safety will auto-clamp to 262k if too large for the GPU.
-# At 384-dim 2L×3S this should fit within 32GB.
+# Batch: 524k tokens/step — 5-layer uses more VRAM, keep micro safe at 65k
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-524288}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
