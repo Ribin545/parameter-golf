@@ -116,7 +116,7 @@ export LABEL_SMOOTHING=0.15
 # =============================================================================
 # Scheduler + stopping
 # =============================================================================
-export WARMUP_STEPS=32
+export WARMUP_STEPS=10
 export VAL_LOSS_EVERY=200
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
