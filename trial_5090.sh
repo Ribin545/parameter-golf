@@ -88,7 +88,7 @@ export CONTROL_WEIGHT_DECAY=0.0
 export DYNAMIC_LR_NORM=1
 export TARGET_GRAD_NORM=0.5
 export GRAD_CLIP_NORM=1.0
-export QK_GAIN_INIT=1.5
+export QK_GAIN_INIT=4.0
 
 # =============================================================================
 # torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
