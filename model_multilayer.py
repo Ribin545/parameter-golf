@@ -240,9 +240,7 @@ class GPTMultiLayer(nn.Module):
                  num_steps: int = 1,
                  logit_softcap: float = 30.0, rope_base: float = 10000.0,
                  qk_gain_init: float = 1.5, bigram_hash_size: int = 2048,
-                 bigram_hash_scale: float = 0.05, lora_rank: int = 0,
-                 aux_loss_enabled: bool = False, aux_loss_layer: int = 3,
-                 aux_loss_weight: float = 0.075):
+                 bigram_hash_scale: float = 0.05, lora_rank: int = 0):
         super().__init__()
         self.tie_embeddings = tie_embeddings
         self.tied_embed_init_std = tied_embed_init_std
@@ -250,9 +248,6 @@ class GPTMultiLayer(nn.Module):
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
-        self.aux_loss_enabled = aux_loss_enabled
-        self.aux_loss_layer = min(aux_loss_layer, num_layers - 1)  # clamp: must be before final layer
-        self.aux_loss_weight = aux_loss_weight
 
         self.num_encoder_layers = num_layers // 2
         self.num_decoder_layers = num_layers - self.num_encoder_layers
@@ -280,14 +275,6 @@ class GPTMultiLayer(nn.Module):
         for module in self.modules():
             if isinstance(module, nn.Linear) and getattr(module, "_zero_init", False):
                 nn.init.zeros_(module.weight)
-
-    def _logits_from_hidden(self, hidden: Tensor) -> Tensor:
-        """Project hidden state to logits using tied/untied LM head."""
-        if self.tie_embeddings:
-            logits_proj = F.linear(hidden, self.tok_emb.weight)
-        else:
-            logits_proj = self.lm_head(hidden)
-        return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
     def forward_logits(self, input_ids: Tensor, **kwargs) -> Tensor:
         """Return logits in shape [B, T, vocab].
@@ -320,78 +307,16 @@ class GPTMultiLayer(nn.Module):
                 x = self.blocks[self.num_encoder_layers + i](x, x0, step_idx=step)
 
         x = self.final_norm(x)
-        return self._logits_from_hidden(x)
+        if self.tie_embeddings:
+            logits_proj = F.linear(x, self.tok_emb.weight)
+        else:
+            logits_proj = self.lm_head(x)
+        return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
-        # If aux loss is enabled, we need intermediate hidden states
-        if self.aux_loss_enabled:
-            return self._forward_with_aux(input_ids, target_ids)
-
         logits = self.forward_logits(input_ids)
         return F.cross_entropy(
             logits.reshape(-1, logits.size(-1)).float(),
             target_ids.reshape(-1),
             reduction="mean",
         )
-
-    def _forward_with_aux(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
-        """Forward pass with auxiliary loss at an intermediate layer.
-
-        Captures hidden state after aux_loss_layer (1-indexed) on the LAST
-        recurrence step, computes aux logits using the tied LM head, and
-        returns: final_loss + aux_loss_weight * aux_loss.
-        """
-        x = self.tok_emb(input_ids)
-        x = x + self.bigram_hash(input_ids)
-        x = F.rms_norm(x, (x.size(-1),))
-        x0 = x
-
-        # Pre-cache skip_weights
-        _skip_cached: list[Tensor] = []
-        for wi in range(self.num_skip_weights):
-            _skip_cached.append(self.skip_weights[wi][None, None, :])
-
-        aux_hidden: Tensor | None = None
-        aux_layer_idx = self.aux_loss_layer - 1  # 0-indexed
-
-        for step in range(self.num_steps):
-            skips: list[Tensor] = []
-            is_last_step = (step == self.num_steps - 1)
-
-            for i in range(self.num_encoder_layers):
-                x = self.blocks[i](x, x0, step_idx=step)
-                skips.append(x)
-                # Capture after this block if it's the aux layer on last step
-                if is_last_step and i == aux_layer_idx:
-                    aux_hidden = x
-
-            for i in range(self.num_decoder_layers):
-                if skips and i < self.num_skip_weights:
-                    x = x + _skip_cached[i].to(dtype=x.dtype) * skips.pop()
-                x = self.blocks[self.num_encoder_layers + i](x, x0, step_idx=step)
-                # Capture after this block if it's the aux layer on last step
-                if is_last_step and (self.num_encoder_layers + i) == aux_layer_idx:
-                    aux_hidden = x
-
-        # Final loss
-        x_norm = self.final_norm(x)
-        final_logits = self._logits_from_hidden(x_norm)
-        final_loss = F.cross_entropy(
-            final_logits.reshape(-1, final_logits.size(-1)).float(),
-            target_ids.reshape(-1),
-            reduction="mean",
-        )
-
-        # Aux loss
-        if aux_hidden is not None:
-            # Apply final_norm to intermediate hidden (same normalization)
-            aux_norm = self.final_norm(aux_hidden)
-            aux_logits = self._logits_from_hidden(aux_norm)
-            aux_loss = F.cross_entropy(
-                aux_logits.reshape(-1, aux_logits.size(-1)).float(),
-                target_ids.reshape(-1),
-                reduction="mean",
-            )
-            return final_loss + self.aux_loss_weight * aux_loss
-
-        return final_loss
