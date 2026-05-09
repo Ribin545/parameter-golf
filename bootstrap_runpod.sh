@@ -46,7 +46,7 @@ fi
 
 # --- Step 2: Install PyTorch with pinned version ---
 echo "[bootstrap] Installing PyTorch nightly (sm_120 Blackwell support for RTX 5090)..."
-pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu128 --quiet
+pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu126 --quiet
 
 # --- Step 3: Install remaining dependencies ---
 echo "[bootstrap] Installing Python dependencies..."
