@@ -54,10 +54,11 @@ export RECURRENCE_STEPS=3
 export MULTILAYER_LORA_RANK=128
 
 # =============================================================================
-# Batch: 524k tokens/step — larger micro-batch for 5090 headroom
-# micro=131,072 cuts grad_accum from 8→4, reducing overhead.
+# Batch: 524k tokens/step — single micro-batch (no grad accumulation overhead)
+# VRAM safety will auto-clamp to 262k if too large for the GPU.
+# At 384-dim 2L×3S this should fit within 32GB.
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-131072}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-524288}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
