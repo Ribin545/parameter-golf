@@ -23,12 +23,42 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 
+try:
+    from triton_mlp import fused_relu2 as triton_fused_relu2
+except Exception:
+    triton_fused_relu2 = None
+
 
 # ─── CastedLinear: fp32 weights, bf16 compute ───
 class CastedLinear(nn.Linear):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._weight_cache: Tensor | None = None
+        self._bias_cache: Tensor | None = None
+        self._weight_cache_dtype: torch.dtype | None = None
+        self._bias_cache_dtype: torch.dtype | None = None
+        self._weight_cache_version: int = -1
+        self._bias_cache_version: int = -1
+
     def forward(self, x: Tensor) -> Tensor:
-        bias = self.bias.to(x.dtype) if self.bias is not None else None
-        return F.linear(x, self.weight.to(x.dtype), bias)
+        weight_version = self.weight._version
+        if (self._weight_cache is None or self._weight_cache_dtype != x.dtype or
+                self._weight_cache_version != weight_version):
+            self._weight_cache = self.weight.to(x.dtype)
+            self._weight_cache_dtype = x.dtype
+            self._weight_cache_version = weight_version
+
+        bias = None
+        if self.bias is not None:
+            bias_version = self.bias._version
+            if (self._bias_cache is None or self._bias_cache_dtype != x.dtype or
+                    self._bias_cache_version != bias_version):
+                self._bias_cache = self.bias.to(x.dtype)
+                self._bias_cache_dtype = x.dtype
+                self._bias_cache_version = bias_version
+            bias = self._bias_cache
+
+        return F.linear(x, self._weight_cache, bias)
 
 
 class RMSNorm(nn.Module):
@@ -184,6 +214,9 @@ class MLP(nn.Module):
         self.proj._zero_init = True
 
     def forward(self, x: Tensor) -> Tensor:
+        if triton_fused_relu2 is not None and x.is_cuda:
+            x = triton_fused_relu2(x, self.fc.weight.t())
+            return self.proj(x)
         x = torch.relu(self.fc(x))
         return self.proj(x.square())
 
@@ -210,7 +243,7 @@ class Block(nn.Module):
         self.mlp_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.resid_mix = nn.Parameter(torch.stack((torch.ones(dim), torch.zeros(dim))).float())
         # Cached bf16 views of scale params (built lazily in _ensure_scale_cache)
-        self._scale_cache: tuple[Tensor, Tensor, Tensor] | None = None
+        self._scale_cache: tuple[Tensor, Tensor, Tensor, Tensor] | None = None
 
     def _ensure_scale_cache(self, dtype: torch.dtype) -> None:
         if self._scale_cache is None or self._scale_cache[0].dtype != dtype:
@@ -219,16 +252,17 @@ class Block(nn.Module):
                 mix[0][None, None, :],
                 mix[1][None, None, :],
                 self.attn_scale.to(dtype=dtype)[None, None, :],
+                self.mlp_scale.to(dtype=dtype)[None, None, :],
             )
 
     def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0) -> Tensor:
         self._ensure_scale_cache(x.dtype)
-        mix0, mix1, attn_scale_v = self._scale_cache
+        mix0, mix1, attn_scale_v, mlp_scale_v = self._scale_cache
         x = mix0 * x + mix1 * x0
         # BUG FIX: propagate step_idx so per-step LoRA actually varies across recurrence steps
         attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
         x = x + attn_scale_v * attn_out
-        x = x + self.mlp_scale.to(dtype=x.dtype)[None, None, :] * self.mlp(self.mlp_norm(x))
+        x = x + mlp_scale_v * self.mlp(self.mlp_norm(x))
         return x
 
 
@@ -290,7 +324,7 @@ class GPTMultiLayer(nn.Module):
         # Pre-cache skip_weights in bf16 (shared across all recurrence steps)
         _skip_cached: list[Tensor] = []
         for wi in range(self.num_skip_weights):
-            _skip_cached.append(self.skip_weights[wi][None, None, :])
+            _skip_cached.append(self.skip_weights[wi].to(dtype=x.dtype)[None, None, :])
 
         # BUG FIX: propagate step_idx so each recurrence pass uses distinct per-step LoRA
         for step in range(self.num_steps):
@@ -303,7 +337,7 @@ class GPTMultiLayer(nn.Module):
             # Decoder: consume skips in reverse order
             for i in range(self.num_decoder_layers):
                 if skips and i < self.num_skip_weights:
-                    x = x + _skip_cached[i].to(dtype=x.dtype) * skips.pop()
+                    x = x + _skip_cached[i] * skips.pop()
                 x = self.blocks[self.num_encoder_layers + i](x, x0, step_idx=step)
 
         x = self.final_norm(x)
