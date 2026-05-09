@@ -42,16 +42,16 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 5L×2S (replaces single-block recurrent)
+# Architecture: Multilayer U-Net 6L×2S (deeper compact with moderate LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=3
+export NUM_LAYERS=6
 export MODEL_DIM=256
 export NUM_HEADS=4
 export NUM_KV_HEADS=2
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=128
+export MULTILAYER_LORA_RANK=64
 
 # =============================================================================
 # Batch: 524k tokens/step — best throughput on 32GB 5090
