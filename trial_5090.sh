@@ -67,9 +67,9 @@ export TRAIN_SEQ_LEN=1024
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.08
+export MATRIX_LR=0.12
 export SCALAR_LR=0.015
-export LORA_LR=0.015
+export LORA_LR=0.03
 export CONTROL_LR=0.015
 export EMBED_LR=0.3
 export HEAD_LR=0.008
