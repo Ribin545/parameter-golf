@@ -45,8 +45,8 @@ if [ ! -f trial_5090.sh ]; then
 fi
 
 # --- Step 2: Install PyTorch with pinned version ---
-echo "[bootstrap] Installing PyTorch (cu126 for RTX 5090 Blackwell sm_120)..."
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+echo "[bootstrap] Installing PyTorch nightly (cu130 for RTX 5090 Blackwell sm_120)..."
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu130
 
 # --- Step 3: Install remaining dependencies ---
 echo "[bootstrap] Installing Python dependencies..."
