@@ -59,7 +59,7 @@ export RECURRENCE_STEPS=2
 # =============================================================================
 export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
 export TRAIN_BATCH_TOKENS=524288
-export TRAIN_SEQ_LEN=1024
+export TRAIN_SEQ_LEN=512
 
 # =============================================================================
 # Optimizer: Muon + AdamW — the 5090 has VRAM headroom to keep Muon
