@@ -49,7 +49,7 @@ export NUM_LAYERS=3
 export MODEL_DIM=384
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
-export MLP_MULT=2
+export MLP_MULT=1
 export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=256
 
