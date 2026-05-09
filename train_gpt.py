@@ -740,7 +740,7 @@ def main() -> None:
 
         for opt in optimizers:
             opt.zero_grad(set_to_none=True)
-        step_loss = 0.0
+        step_loss_tensor = torch.zeros((), device=device, dtype=torch.float32)
         loss_log_scale = 1.0 / grad_accum_steps
         backward_scale = loss_log_scale
 
@@ -755,19 +755,19 @@ def main() -> None:
             while True:
                 x, y = train_loader.next_batch(args.micro_batch_tokens, cur_seq)
                 loss = model(x, y)
-                loss_val = loss.item()
+                loss_val = float(loss.detach().float()) if loss_filter is not None else None
 
                 if loss_filter is not None and loss_filter.should_skip(loss_val):
                     retries += 1
                     if retries >= args.loss_filter_max_retries:
                         loss_filter.force_accept(loss_val)
                         (loss * backward_scale).backward()
-                        step_loss += loss_val * loss_log_scale
+                        step_loss_tensor.add_(loss.detach().float() * loss_log_scale)
                         break
                     continue
                 else:
                     (loss * backward_scale).backward()
-                    step_loss += loss_val * loss_log_scale
+                    step_loss_tensor.add_(loss.detach().float() * loss_log_scale)
                     break
 
         if loss_filter is not None and step % 100 == 0:
@@ -892,6 +892,7 @@ def main() -> None:
                 if ema_n in model_ema:
                     model_ema[ema_n].data.copy_(p.data)
 
+        step_loss = float(step_loss_tensor.item())
         dt = (time.perf_counter() - t0) * 1000.0
         training_time_ms += dt
         t0 = time.perf_counter()
