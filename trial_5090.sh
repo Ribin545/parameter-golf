@@ -54,9 +54,9 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=256
 
 # =============================================================================
-# Batch: 524k tokens/step — 1024-dim is VRAM-heavy, keep micro safe at 32k
+# Batch: 524k tokens/step
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-32768}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
