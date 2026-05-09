@@ -42,10 +42,10 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 1L×3S (wide single-block with deep recurrence + LoRA)
+# Architecture: Multilayer U-Net 2L×3S (wide two-block with deep recurrence + LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=1
+export NUM_LAYERS=2
 export MODEL_DIM=512
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
