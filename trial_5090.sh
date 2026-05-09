@@ -45,13 +45,13 @@ fi
 # Architecture: Multilayer U-Net 5L×2S (384-dim with LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=5
+export NUM_LAYERS=2
 export MODEL_DIM=384
 export NUM_HEADS=6
 export NUM_KV_HEADS=3
 export MLP_MULT=1
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=8
+export MULTILAYER_LORA_RANK=64
 
 # =============================================================================
 # Batch: 524k tokens/step — micro-batch reduced for VRAM safety (618 MB headroom)
@@ -65,15 +65,15 @@ export TRAIN_SEQ_LEN=1024
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.12
-export SCALAR_LR=0.03
-export LORA_LR=0.03
-export CONTROL_LR=0.03
-export EMBED_LR=0.3
-export HEAD_LR=0.008
-export TIED_EMBED_LR=0.03
+export MATRIX_LR=0.242
+export SCALAR_LR=0.06
+export LORA_LR=0.06
+export CONTROL_LR=0.06
+export EMBED_LR=0.6
+export HEAD_LR=0.016
+export TIED_EMBED_LR=0.06
 export MUON_BACKEND_STEPS=6
-export MUON_MOMENTUM=0.95
+export MUON_MOMENTUM=0.99
 
 # =============================================================================
 # Weight decay
