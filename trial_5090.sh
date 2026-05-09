@@ -64,7 +64,7 @@ export TRAIN_SEQ_LEN=1024
 # =============================================================================
 # Optimizer: Muon + AdamW — the 5090 has VRAM headroom to keep Muon
 # =============================================================================
-export OPTIM_MODE=muon_alt
+export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
 export MATRIX_LR=0.08
 export SCALAR_LR=0.015
