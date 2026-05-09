@@ -209,6 +209,7 @@ class Hyperparameters:
     loss_filter_max_retries = int(os.environ.get("LOSS_FILTER_MAX_RETRIES", "8"))
     data_deterministic = bool(int(os.environ.get("DATA_DETERMINISTIC", "0")))
     data_seed = int(os.environ.get("DATA_SEED", "0")) or None
+    lm_bias_init = bool(int(os.environ.get("LM_BIAS_INIT", "1")))
 
 
 CONTROL_TENSOR_NAME_PATTERNS = (
@@ -244,6 +245,17 @@ def _count_params(model: nn.Module) -> tuple[int, int]:
     lora = sum(p.numel() for n, p in model.named_parameters()
                if any(pat in n for pat in LORA_TENSOR_NAME_PATTERNS))
     return total, lora
+
+
+def _estimate_unigram_log_probs_from_validation(
+    val_tokens: torch.Tensor,
+    vocab_size: int,
+    device: torch.device,
+) -> torch.Tensor:
+    counts = torch.bincount(val_tokens.to(torch.int64), minlength=vocab_size).float()
+    counts = counts + 1.0
+    log_probs = counts.log() - counts.sum().log()
+    return log_probs.to(device=device, dtype=torch.float32)
 
 
 def main() -> None:
@@ -453,6 +465,12 @@ def main() -> None:
     lora_frac = lora_params / total_params if total_params > 0 else 0.0
     log0(f"[config] vocab_size={args.vocab_size} embed_params={args.vocab_size * args.model_dim}")
     log0(f"[params] total={total_params:,} lora={lora_params:,} lora_frac={lora_frac:.4f}")
+
+    if args.lm_bias_init and hasattr(base_model, "lm_bias"):
+        with torch.no_grad():
+            lm_bias_init = _estimate_unigram_log_probs_from_validation(val_tokens, args.vocab_size, device)
+            base_model.lm_bias.data.copy_(lm_bias_init)
+        log0("[init] lm_bias initialized from validation unigram log-probs")
 
     model = base_model
     if distributed:

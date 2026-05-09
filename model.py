@@ -396,6 +396,7 @@ class GPT(nn.Module):
 
         self.final_norm = RMSNorm()
         self.lm_head = None if tie_embeddings else CastedLinear(model_dim, vocab_size, bias=False)
+        self.lm_bias = nn.Parameter(torch.zeros(vocab_size, dtype=torch.float32))
 
         print("[debug] GPT init: casting params...")
         with torch.no_grad():
@@ -489,6 +490,7 @@ class GPT(nn.Module):
             logits_proj = F.linear(x, self.tok_emb.weight)
         else:
             logits_proj = self.lm_head(x)
+        logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
         logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
         return logits
 

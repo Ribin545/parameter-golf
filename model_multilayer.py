@@ -299,6 +299,7 @@ class GPTMultiLayer(nn.Module):
 
         self.final_norm = RMSNorm()
         self.lm_head = None if tie_embeddings else CastedLinear(model_dim, vocab_size, bias=False)
+        self.lm_bias = nn.Parameter(torch.zeros(vocab_size, dtype=torch.float32))
         if self.lm_head is not None:
             self.lm_head._zero_init = True
         self._init_weights()
@@ -345,6 +346,7 @@ class GPTMultiLayer(nn.Module):
             logits_proj = F.linear(x, self.tok_emb.weight)
         else:
             logits_proj = self.lm_head(x)
+        logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
         return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
