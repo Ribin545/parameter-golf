@@ -46,7 +46,7 @@ fi
 # =============================================================================
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=2
-export MODEL_DIM=384
+export MODEL_DIM=480
 export NUM_HEADS=6
 export NUM_KV_HEADS=3
 export MLP_MULT=1
