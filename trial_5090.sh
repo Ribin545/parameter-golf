@@ -54,9 +54,9 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=256
 
 # =============================================================================
-# Batch: 524k tokens/step
+# Batch: 524k tokens/step — full micro-batch (grad_accum=1, zero overhead)
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-524288}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
