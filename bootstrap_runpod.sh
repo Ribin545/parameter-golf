@@ -44,22 +44,16 @@ if [ ! -f trial_5090.sh ]; then
     exit 1
 fi
 
-# --- Step 2: Install remaining dependencies first (except torch stack) ---
-echo "[bootstrap] Installing Python dependencies..."
+# --- Step 2: Install Python dependencies only (keep pod's existing torch/CUDA stack) ---
+echo "[bootstrap] Installing Python dependencies (no torch reinstall)..."
 python3 -m pip install --upgrade pip --quiet
 python3 -m pip install numpy tqdm huggingface-hub kernels setuptools typing-extensions==4.15.0 datasets tiktoken sentencepiece triton --quiet
-
-# --- Step 3: Force-install exact PyTorch build LAST so nothing overwrites it ---
-echo "[bootstrap] Removing incompatible preinstalled torch packages..."
-python3 -m pip uninstall -y torch torchvision torchaudio >/dev/null 2>&1 || true
-echo "[bootstrap] Installing exact PyTorch nightly cu130 (Blackwell sm_120 support for RTX 5090)..."
-python3 -m pip install --no-cache-dir --force-reinstall torch==2.13.0.dev20260507 --index-url https://download.pytorch.org/whl/nightly/cu130
 python3 - <<'PY'
 import torch
 print('[bootstrap] torch_check', torch.__version__, 'cuda=', torch.version.cuda)
 PY
 
-# --- Step 4: Run 5090 throughput training ---
+# --- Step 3: Run 5090 throughput training ---
 echo "[bootstrap] Launching 5090 throughput training..."
 chmod +x trial_5090.sh
 ./trial_5090.sh
