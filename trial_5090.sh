@@ -45,13 +45,13 @@ fi
 # Architecture: Multilayer U-Net 5L×2S (replaces single-block recurrent)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=5
-export MODEL_DIM=384
-export NUM_HEADS=6
-export NUM_KV_HEADS=3
+export NUM_LAYERS=3
+export MODEL_DIM=256
+export NUM_HEADS=4
+export NUM_KV_HEADS=2
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=0
+export MULTILAYER_LORA_RANK=128
 
 # =============================================================================
 # Batch: 524k tokens/step — best throughput on 32GB 5090
