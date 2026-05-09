@@ -1,6 +1,6 @@
 # Phase 8 Path Report: Matching 5090 Loss Curve Under 600ms
 
-**Date:** 2026-05-08 | **GPU:** RTX 3090 24GB | **Baseline:** 5090 @ 200 steps, step 10 loss=5.95, final~2.75
+**Date:** 2026-05-09 | **GPU:** RTX 3090 24GB | **Baseline:** 5090 @ 200 steps, step 10 loss=5.95, final~2.75
 
 ## Python Path (WSL with Triton)
 
@@ -17,34 +17,55 @@ Example:
 wsl ~/.pyenv/versions/pg312/bin/python3 script.py
 ```
 
+## Dataset Paths (WSL)
+
+```
+DATA_PATH=/mnt/e/Projects/Proj/golf/data/datasets/fineweb10B_sp1024
+TOKENIZER_PATH=/mnt/e/Projects/Proj/golf/data/tokenizers/fineweb_1024_bpe.model
+```
+
 ---
 
 ## Executive Summary
 
-The 12-step recurrent model runs at **~350ms/step** (well under 600ms target) but trains 4x less data per step than the 5090 (131k vs 524k tokens). All attempts to increase micro-batch to 262k (to match data rate) fail with CUDA OOM — the 12-step unrolled forward graph + compile consumes 22GB even at 131k, leaving insufficient headroom for a 2x batch increase.
+**Two architectures were explored:**
 
-**Optimal path:** Fix gradient scaling mathematically (backward_scale=1/12, per-step LR x12 compensation) and train 800 steps at 131k to match token count.
+### OLD: Single-block 12-step recurrent (model.py)
+- ~350ms/step, 131k tokens/step, compile works
+- CUDA OOM at 262k batch — 22GB graph + compile overhead
+- Gradient scaling problem: shared vs per-step params get different gradients
+- Abandoned in favor of multilayer
+
+### NEW (CURRENT): 5-layer × 2-step multilayer (model_multilayer.py)
+- **~250ms/step** stable, 65536 tokens/step, **compile DISABLED** (see known issue)
+- VRAM peak: **9.4GB** — massive headroom for larger batch/model
+- Val BPB after 1200 steps (~5 min): **1.6141** and still dropping
+- Matches `trial_5090.sh` config exactly: dim=384, heads=6, kv=3, mlp=2
+- Total params: **6,349,086** (6.3M), int8 payload: **5.34 MiB** (55.9% compression)
+- Full features: Muon+AdamW, shell centering (λ=0.02), bigram hash, dropout 0.4, label smoothing 0.15
+
+**Optimal path:** 5L×2S multilayer, fix compile shape bug, scale micro_batch to 131k.
 
 ---
 
 ## Experiment Results
 
-### Path 1: Reduce model_dim 384→256, micro_batch 262k
+### Path 1: Reduce model_dim 384→256, micro_batch 262k (OLD 12-step)
 - **Rationale:** 33% reduction in parameter count => 33% less activation memory => fits 2x batch
 - **Result:** FAIL - CUDA OOM
 - **Why:** LoRA adds (12, 256, 256)x2 per layer = 1.6M params, partially offsetting savings. Inductor compile overhead is ~4-6GB regardless of dim.
 
-### Path 2: Compile mode="max-autotune" with 262k
+### Path 2: Compile mode="max-autotune" with 262k (OLD 12-step)
 - **Rationale:** Different Triton config selection might fit within budget
 - **Result:** FAIL - CUDA OOM after 60s of Triton config errors
 - **Why:** max-autotune tries dozens of Triton MM configs per kernel, each allocating scratch buffers. 12 unrolled steps x 4 kernels/step x 30 configs = memory explosion.
 
-### Path 3: Reduce steps 12→8 with 262k (dim=384)
+### Path 3: Reduce steps 12→8 with 262k (dim=384) (OLD 12-step)
 - **Rationale:** 33% fewer unrolled steps => 33% less graph memory
 - **Result:** FAIL - CUDA OOM
 - **Why:** The 8-step graph still duplicates Block.forward 8x, and compile needs kernel parameter copies regardless.
 
-### Gradient Scaling Tests (131k, compile ON)
+### Gradient Scaling Tests (OLD, 131k, compile ON)
 
 | Approach | Step 10 loss | Step 100 loss | Step 200 loss | Speed | Notes |
 |----------|-------------|---------------|---------------|-------|-------|
@@ -54,50 +75,73 @@ The 12-step recurrent model runs at **~350ms/step** (well under 600ms target) bu
 | backward=1.0, clip=1.0 | 7.24 | 6.56 | 6.44 | 710ms | No compile needed, slow |
 | **Baseline (5090, steps=1)** | **5.95** | **3.15** | **2.75** | **~1000ms** | Non-recurrent, 524k tokens/step |
 
+### Path 4 (SUCCESS): 5-layer × 2-step multilayer (model_multilayer.py)
+
+**Config (matches trial_5090.sh):**
+```
+MODEL_TYPE=multilayer NUM_LAYERS=5 MODEL_DIM=384 NUM_HEADS=6 NUM_KV_HEADS=3 MLP_MULT=2
+RECURRENCE_STEPS=2 MICRO_BATCH_TOKENS=65536 TRAIN_BATCH_TOKENS=65536
+OPTIM_MODE=muon_adam MATRIX_LR=0.08 SCALAR_LR=0.015 MUON_BACKEND_STEPS=3
+SHELL_CENTERING=1 SHELL_CENTERING_LAM=0.02 BIGRAM_HASH=1 DROPOUT_P=0.4
+LABEL_SMOOTHING=0.15 DYNAMIC_LR_NORM=1 TARGET_GRAD_NORM=0.5 GRAD_CLIP_NORM=1.0
+DISABLE_COMPILE=1  # see known issue below
+```
+
+**Results (real FineWeb data, 11 min run):**
+
+| Step | val_loss | val_bpb | Train Time | Step Time | VRAM Peak |
+|------|----------|---------|------------|-----------|-----------|
+| 200  | 4.0198   | 2.4149  | 57s        | ~254ms    | 9.41 GiB  |
+| 400  | 3.4891   | 2.0960  | 108s       | ~254ms    | 9.44 GiB  |
+| 600  | 2.9908   | 1.7967  | 158s       | ~253ms    | 9.44 GiB  |
+| 800  | 2.8767   | 1.7281  | 209s       | ~252ms    | 9.44 GiB  |
+| 1000 | 2.7829   | 1.6718  | 260s       | ~252ms    | 9.44 GiB  |
+| 1200 | 2.6869   | 1.6141  | 312s       | ~252ms    | 9.44 GiB  |
+
+Training loss at step 500: ~2.98, step 1000: ~2.78. Model is learning steadily.
+
+Int8 checkpoint sizes: 4.20 MiB (step 200) → 5.34 MiB (step 1200), ~55% compression ratio.
+
 ---
 
-## Root Cause Analysis
+## Known Issues
 
-### Problem: Heterogeneous Gradient Accumulation
+### 1. torch.compile + multilayer recurrence shape bug
 
-The 12-step unrolled forward uses **shared weights** (CastedLinear/qkv) 12x per forward pass. Autograd's chain rule accumulates the loss gradient 12x on shared weights but only 1x on **per-step params** (LoRA lora_A/B, v_step_bias, step_embeddings, attention scales). LoRA params constitute **67% of total parameters** (3.5M/5.3M).
+```
+RuntimeError: Function CompiledFunctionBackward returned an invalid gradient
+at index 4 - got [384] but expected shape compatible with [1, 1, 384]
+```
 
-| Approach | Shared Weight Grad | Per-Step Param Grad | Effective LR Ratio |
-|----------|-------------------|---------------------|-------------------|
-| backward=1/12 | 1x baseline (correct) | 1/12x baseline (**starved**) | Shared=1x, Per-step=0.08x |
-| backward=1.0 | 12x baseline (**clipped**) | 1x baseline (correct) | Shared=0.08x, Per-step=1x |
-| backward=1/sqrt(12) | 3.46x baseline (**partially clipped**) | 0.29x baseline (**starved**) | Both wrong |
+The 5-layer × 2-step unrolled forward graph produces gradient shapes that confuse `torch.compile`'s backward pass. **Workaround:** `DISABLE_COMPILE=1` — still hits ~250ms/step which is well under 600ms. Should investigate dynamic=False or per-layer compile wrappers.
 
-**No single backward_scale works for both param types simultaneously.**
+### 2. Gradient heterogeneity (OLD 12-step only, not applicable to multilayer)
 
-### Solution: Per-Parameter LR Compensation
-
-The only mathematically correct approach:
-1. `backward_scale = 1.0 / num_steps` — divide all gradients by 12
-2. Multiply per-step param LRs by `num_steps` — LoRA, step_embeddings, v_step_bias, scales
-3. Shared weights at standard LR — they already receive 12x gradient (now divided to 1x)
-
-This requires fixing the LR overwrite in train_gpt.py where group["lr"] gets reset after compensation.
+The multilayer model doesn't share weights between recurrence steps (each layer has its own params), so this problem is unique to the old single-block architecture.
 
 ---
 
 ## Recommended Production Config
 
 ```
-MODEL_DIM=384 RECURRENCE_STEPS=12 LORA_RANK=384 HEADS=4 KV=2 MLP_MULT=3
-MICRO_BATCH_TOKENS=131072 TRAIN_BATCH_TOKENS=131072  # 1x grad accum
-MUON_BACKEND_STEPS=3 ENABLE_RECURRENT_TRAIN_COMPILE=1
-TORCH_COMPILE_MODE=default PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-GRAD_CLIP_NORM=1.0
-# Per-step LR compensation enabled in code
-MATRIX_LR=0.08 SCALAR_LR=0.015 LORA_LR=0.18 CONTROL_LR=0.15 TIED_EMBED_LR=0.06
-ITERATIONS=800  # 800x131k = 105M tokens (matches 5090's 200x524k)
+# 5L×2S multilayer (model_multilayer.py)
+MODEL_TYPE=multilayer NUM_LAYERS=5 MODEL_DIM=384 NUM_HEADS=6 NUM_KV_HEADS=3 MLP_MULT=2
+RECURRENCE_STEPS=2 MICRO_BATCH_TOKENS=131072 TRAIN_BATCH_TOKENS=131072  # 1x grad accum
+OPTIM_MODE=muon_adam MATRIX_LR=0.08 SCALAR_LR=0.015 MUON_BACKEND_STEPS=3
+SHELL_CENTERING=1 SHELL_CENTERING_LAM=0.02 BIGRAM_HASH=1 DROPOUT_P=0.4
+LABEL_SMOOTHING=0.15 DYNAMIC_LR_NORM=1 TARGET_GRAD_NORM=0.5 GRAD_CLIP_NORM=1.0
+DISABLE_COMPILE=1  # remove once shape bug is fixed
+ITERATIONS=2000 MAX_WALLCLOCK_SECONDS=600
 ```
 
-**Expected step time:** ~350ms | **800 steps:** ~280s | **Under 600ms/step:** Yes
+**Expected step time:** ~250ms | **1200 steps:** ~312s | **Under 600ms/step:** Yes
+**VRAM headroom at 65536 tokens:** 14.6GB free → can scale micro_batch to 131k or increase dim
 
 ---
 
 ## Files Modified
 - `model.py` — Block.forward compile (per-step), backward_scale removal, fixed dropout
+- `model_multilayer.py` — 5-layer × 2-step recurrent multilayer architecture
 - `train_gpt.py` — gradient correction hook, LR schedule fix, per-step LR compensation
+- `ab_75step.py` — A/B test harness for multilayer speed testing
+- `phase8_results.txt` — raw results dump from training runs
