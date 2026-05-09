@@ -47,8 +47,8 @@ fi
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=5
 export MODEL_DIM=384
-export NUM_HEADS=6
-export NUM_KV_HEADS=3
+export NUM_HEADS=4
+export NUM_KV_HEADS=2
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=256
@@ -98,7 +98,7 @@ export DISABLE_COMPILE=1
 # =============================================================================
 # Features (quality knobs — cheap enough to keep)
 # =============================================================================
-export BIGRAM_HASH_ENABLED=1
+export BIGRAM_HASH_ENABLED=0
 export BIGRAM_HASH_SIZE=2048
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
