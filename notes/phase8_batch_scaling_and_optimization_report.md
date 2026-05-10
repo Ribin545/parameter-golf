@@ -372,20 +372,21 @@ cd /workspace/parameter-golf && git checkout -- . && git pull origin master && b
 
 ### 9.7 Tier 1 Safe Improvements — Results
 
-| Config | Final Step | val_bpb | val_loss | Step Time | peak_alloc_gib | model_pt | int8_size |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| Conservative (lora_rank=8) | 1,041 | 1.4604 | 2.4750 | ~520ms | 25.27 | 20.91 MiB | 9.65 MiB |
-| **Tier 1 (lora_rank=16)** | 1,040 | **1.4564** | 2.4681 | ~522ms | 25.33 | 23.30 MiB | 10.72 MiB |
+Two sub-experiments within Tier 1: (a) base Tier 1 with lora_rank=8, and (b) higher LoRA capacity with lora_rank=16.
 
-**Result: -0.004 val_bpb improvement (+0.27%).**
+| Config | lora_rank | qk_gain | bigram | warmup | Final Step | val_bpb | val_loss | Step Time | peak_alloc | model_pt | int8_size |
+|---|---|:---:|:---:|:---:|:---:|---:|---:|---:|---:|---:|---:|---:|
+| Baseline | 8 | 1.5 | 2048 | 10 | 1,041 | **1.4604** | 2.4750 | ~520ms | 25.27 | 20.91 MiB | 9.65 MiB |
+| **Tier 1 (base)** | 8 | 2.0 | 4096 | 20 | 1,043 | **1.4600** | 2.4743 | ~520ms | 25.28 | 22.91 MiB | 10.41 MiB |
+| Tier 1b (rank=16) | 16 | 2.0 | 4096 | 20 | 1,040 | 1.4564 | 2.4681 | ~522ms | 25.33 | 23.30 MiB | 10.72 MiB |
 
 #### Analysis
 
-- **Marginal gain.** Doubling LoRA rank from 8→16 (0.4M→0.8M LoRA params) delivered only a 0.27% bpb improvement — effectively noise-level given run-to-run variance.
-- **Model size grew 11.4%** (20.91 → 23.30 MiB FP, 9.65 → 10.72 MiB int8) for near-zero quality gain.
-- The 10-minute training window likely doesn't provide enough steps to converge the extra LoRA parameters. rank-8 already provides sufficient per-step adapter capacity for 2 recurrence steps × 5 layers.
+- **Tier 1 (base): zero improvement.** qk_gain=2.0 + bigram=4096 + warmup=20 delivered 1.4600 — statistically identical to baseline 1.4604. The near-zero-cost feature bumps (bigram table size, QK gain init) don't move the needle at 200k batch / 512-dim.
+- **Tier 1b (rank=16): marginal -0.004 bpb.** Doubling LoRA params (0.4M→0.8M) for 0.27% quality improvement is noise-level. Model grew 11.4% larger (20.91→23.30 MiB FP) for no practical gain.
+- The 10-minute training window doesn't provide enough steps to converge extra parameters. rank-8 already provides sufficient per-step adapter capacity.
 
-#### Verdict: Keep lora_rank=8 unless training duration increases significantly (30+ minutes). The extra capacity doesn't pay off in 10-minute runs.
+#### Verdict: Both Tier 1 variants are essentially tied with baseline. The original baseline config (lora_rank=8, qk_gain=1.5, bigram=2048) is just as good and produces a smaller model (9.65 MiB int8 vs 10.41 MiB).
 
 ### 9.8 Tier 2 Improvements — Results (REGRESSION)
 
@@ -419,11 +420,12 @@ To push toward 1.3 val_bpb, higher-impact changes are needed:
 | Phase | lora_rank | qk_gain | bigram | TTT | lvl_sig | val_bpb | model_pt | int8_size | Note |
 |---|---|:---:|:---:|:---:|:---:|:---:|---:|---:|---:|---|
 | Baseline | 8 | 1.5 | 2048 | 0 | 0 | **1.4604** | 20.91 MiB | 9.65 MiB | proven config |
-| Tier 1 | 16 | 2.0 | 4096 | 0 | 0 | 1.4564 | 23.30 MiB | 10.72 MiB | marginal (-0.27%) |
+| Tier 1 (base) | 8 | 2.0 | 4096 | 0 | 0 | 1.4600 | 22.91 MiB | 10.41 MiB | tied with baseline |
+| Tier 1b (rank=16) | 16 | 2.0 | 4096 | 0 | 0 | 1.4564 | 23.30 MiB | 10.72 MiB | marginal (-0.27%) |
 | Tier 2 | 8 | 2.0 | 4096 | 1 | 1 | 1.4883 | 22.91 MiB | 10.50 MiB | **regression (+2.2%)** ❌ |
 | 384-dim trial | 8 | 1.5 | 2048 | 0 | 0 | 1.4967 | 12.40 MiB | 5.77 MiB | degraded (+2.5%) |
 
-**Winner: Tier 1 config (lora_rank=8, qk_gain=2.0, bigram=4096, warmup=20) at 1.4564 val_bpb.**
+**Winner: Baseline config (lora_rank=8, qk_gain=1.5, bigram=2048, warmup=10) at 1.4604 val_bpb, 9.65 MiB int8 — best quality-size ratio.**
 
 
 
