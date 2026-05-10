@@ -42,16 +42,16 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 6L×2S (512-dim with rank-8 LoRA)
+# Architecture: Multilayer U-Net 5L×2S (512-dim with rank-32 LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=6
+export NUM_LAYERS=5
 export MODEL_DIM=512
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=8
+export MULTILAYER_LORA_RANK=32
 
 # =============================================================================
 # Batch: 65k tokens/step — safe for 24GB RTX 3090 (grad_accum=1)
@@ -109,7 +109,7 @@ export TIED_EMBED_INIT_STD=0.005
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.4
+export DROPOUT_P=0.25
 export LABEL_SMOOTHING=0.15
 
 # =============================================================================
