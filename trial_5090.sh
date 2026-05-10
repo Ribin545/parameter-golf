@@ -120,6 +120,7 @@ export LABEL_SMOOTHING=0.15
 # =============================================================================
 export SCHEDULE_FREE=1
 export WARMUP_STEPS=10
+export TRAIN_LOG_EVERY=10
 export VAL_LOSS_EVERY=200
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1

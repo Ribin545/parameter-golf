@@ -43,24 +43,32 @@ class CastedLinear(nn.Linear):
         self._bias_cache_version: int = -1
 
     def forward(self, x: Tensor) -> Tensor:
-        weight_version = self.weight._version
-        if (self._weight_cache is None or self._weight_cache_dtype != x.dtype or
-                self._weight_cache_version != weight_version):
-            self._weight_cache = self.weight.to(x.dtype)
-            self._weight_cache_dtype = x.dtype
-            self._weight_cache_version = weight_version
+        # Fast path: if params already match compute dtype/device, avoid cache logic.
+        if self.weight.dtype == x.dtype and self.weight.device == x.device:
+            weight = self.weight
+        else:
+            weight_version = self.weight._version
+            if (self._weight_cache is None or self._weight_cache_dtype != x.dtype or
+                    self._weight_cache_version != weight_version):
+                self._weight_cache = self.weight.to(x.dtype)
+                self._weight_cache_dtype = x.dtype
+                self._weight_cache_version = weight_version
+            weight = self._weight_cache
 
         bias = None
         if self.bias is not None:
-            bias_version = self.bias._version
-            if (self._bias_cache is None or self._bias_cache_dtype != x.dtype or
-                    self._bias_cache_version != bias_version):
-                self._bias_cache = self.bias.to(x.dtype)
-                self._bias_cache_dtype = x.dtype
-                self._bias_cache_version = bias_version
-            bias = self._bias_cache
+            if self.bias.dtype == x.dtype and self.bias.device == x.device:
+                bias = self.bias
+            else:
+                bias_version = self.bias._version
+                if (self._bias_cache is None or self._bias_cache_dtype != x.dtype or
+                        self._bias_cache_version != bias_version):
+                    self._bias_cache = self.bias.to(x.dtype)
+                    self._bias_cache_dtype = x.dtype
+                    self._bias_cache_version = bias_version
+                bias = self._bias_cache
 
-        return F.linear(x, self._weight_cache, bias)
+        return F.linear(x, weight, bias)
 
 
 class RMSNorm(nn.Module):
@@ -191,7 +199,8 @@ class CausalSelfAttention(nn.Module):
 
     def _cached_q_gain(self, dtype: torch.dtype) -> Tensor:
         # Tier 2 audit change: q_gain is tiny; avoid persistent GPU cache residency.
-        return self.q_gain.to(dtype=dtype)[None, :, None, None]
+        q_gain = self.q_gain if self.q_gain.dtype == dtype else self.q_gain.to(dtype=dtype)
+        return q_gain[None, :, None, None]
 
     def forward(self, x: Tensor, step_idx: int = 0) -> Tensor:
         bsz, seqlen, dim = x.shape
@@ -253,10 +262,12 @@ class Block(nn.Module):
     def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0) -> Tensor:
         # Tier 2 audit change: these tensors are tiny; recompute casts instead of
         # keeping persistent cached mirrors on GPU.
-        mix = self.resid_mix.to(dtype=x.dtype)
+        mix = self.resid_mix if self.resid_mix.dtype == x.dtype else self.resid_mix.to(dtype=x.dtype)
         mix0, mix1 = mix[0][None, None, :], mix[1][None, None, :]
-        attn_scale_v = self.attn_scale.to(dtype=x.dtype)[None, None, :]
-        mlp_scale_v = self.mlp_scale.to(dtype=x.dtype)[None, None, :]
+        attn_scale = self.attn_scale if self.attn_scale.dtype == x.dtype else self.attn_scale.to(dtype=x.dtype)
+        mlp_scale = self.mlp_scale if self.mlp_scale.dtype == x.dtype else self.mlp_scale.to(dtype=x.dtype)
+        attn_scale_v = attn_scale[None, None, :]
+        mlp_scale_v = mlp_scale[None, None, :]
         x = mix0 * x + mix1 * x0
         # BUG FIX: propagate step_idx so per-step LoRA actually varies across recurrence steps
         attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
@@ -322,6 +333,8 @@ class GPTMultiLayer(nn.Module):
             return block_idx >= self.num_encoder_layers
         if mode == "encoder":
             return block_idx < self.num_encoder_layers
+        if mode == "encoder_grouped":
+            return False
         if mode == "alternate":
             return (block_idx % 2) == 1
         return True
@@ -337,6 +350,37 @@ class GPTMultiLayer(nn.Module):
             )
         return block(x, x0, step_idx=step_idx)
 
+    def _run_encoder_stage(self, x: Tensor, x0: Tensor, step_idx: int) -> tuple[Tensor, list[Tensor]]:
+        if (
+            self.activation_checkpointing
+            and self.activation_checkpoint_mode == "encoder_grouped"
+            and self.training
+            and torch.is_grad_enabled()
+        ):
+            def encoder_fn(a: Tensor, b: Tensor) -> tuple[Tensor, ...]:
+                out = a
+                skips: list[Tensor] = []
+                for i in range(self.num_encoder_layers):
+                    out = self.blocks[i](out, b, step_idx=step_idx)
+                    skips.append(out)
+                return (out, *skips)
+
+            enc_out = checkpoint(
+                encoder_fn,
+                x,
+                x0,
+                use_reentrant=False,
+                preserve_rng_state=False,
+            )
+            return enc_out[0], list(enc_out[1:])
+
+        skips: list[Tensor] = []
+        out = x
+        for i in range(self.num_encoder_layers):
+            out = self._run_block(self.blocks[i], i, out, x0, step_idx=step_idx)
+            skips.append(out)
+        return out, skips
+
     def forward_logits(self, input_ids: Tensor, **kwargs) -> Tensor:
         """Return logits in shape [B, T, vocab].
 
@@ -351,15 +395,15 @@ class GPTMultiLayer(nn.Module):
         # Pre-cache skip_weights in bf16 (shared across all recurrence steps)
         _skip_cached: list[Tensor] = []
         for wi in range(self.num_skip_weights):
-            _skip_cached.append(self.skip_weights[wi].to(dtype=x.dtype)[None, None, :])
+            skip_w = self.skip_weights[wi]
+            if skip_w.dtype != x.dtype:
+                skip_w = skip_w.to(dtype=x.dtype)
+            _skip_cached.append(skip_w[None, None, :])
 
         # BUG FIX: propagate step_idx so each recurrence pass uses distinct per-step LoRA
         for step in range(self.num_steps):
-            skips: list[Tensor] = []
             # Encoder: store skips
-            for i in range(self.num_encoder_layers):
-                x = self._run_block(self.blocks[i], i, x, x0, step_idx=step)
-                skips.append(x)
+            x, skips = self._run_encoder_stage(x, x0, step_idx=step)
 
             # Decoder: consume skips in reverse order
             for i in range(self.num_decoder_layers):

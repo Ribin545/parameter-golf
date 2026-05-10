@@ -919,8 +919,19 @@ def main() -> None:
         dt = (time.perf_counter() - t0) * 1000.0
         training_time_ms += dt
         t0 = time.perf_counter()
-        # Print dt to console only (not to disk) for measurement
-        print(f"step:{step} loss:{step_loss:.4f} dt:{dt:.2f}ms")
+        # PERF FIX: TRAIN_LOG_EVERY existed but was ignored, causing synchronous
+        # console logging every step. That adds unnecessary Python/string/terminal
+        # overhead to the hot path, especially under tee or remote terminals.
+        should_log_train = (
+            args.train_log_every > 0
+            and (
+                step < 10
+                or step % args.train_log_every == 0
+                or last_step
+            )
+        )
+        if should_log_train:
+            print(f"step:{step} loss:{step_loss:.4f} dt:{dt:.2f}ms")
 
         step += 1
 
