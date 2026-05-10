@@ -42,10 +42,10 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 5L×2S (512-dim with rank-8 LoRA)
+# Architecture: Multilayer U-Net 6L×2S (512-dim with rank-8 LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=5
+export NUM_LAYERS=6
 export MODEL_DIM=512
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
