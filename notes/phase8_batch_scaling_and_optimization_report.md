@@ -587,3 +587,59 @@ DYNAMIC_LR_NORM=1  TARGET_GRAD_NORM=0.5  SCALAR_WD=0.20
 
 **Expected:** ~405ms/step, ~1100 steps/600s, final stride-64 val_bpb ~1.59.
 
+---
+
+## 13. PENDING: Activation Checkpointing Mode Sweep (200k batch, 10-min each)
+
+**Script:** `sweep_checkpointing.sh` | **Status:** 🟡 Pending execution
+
+### 13.1 Motivation
+
+`MULTILAYER_ACTIVATION_CHECKPOINT` trades compute for VRAM during the backward pass. Currently set to `encoder` mode (checkpoint encoder blocks only). Exploring other modes could free VRAM headroom to increase batch size from 200k → 250k+.
+
+### 13.2 Test Matrix (6 modes × 10 min = ~60 min total)
+
+| # | Mode | What Gets Checkpointed | Hypothesis |
+|---|------|----------------------|-----------|
+| 1 | `encoder` (current) | Encoder blocks 0-2 | Baseline — proven stable |
+| 2 | `full` | ALL 5 blocks | Max VRAM save, slight recompute overhead |
+| 3 | `decoder` | Decoder blocks 3-4 | Minimal VRAM save, fastest |
+| 4 | `alternate` | Every other block (1, 3) | Balanced — half the recompute, half the VRAM |
+| 5 | `encoder_grouped` | Entire encoder as one group | Aggressive VRAM reduction |
+| 6 | `off` | Nothing — pure eager | Max VRAM, most steps, no recompute |
+
+### 13.3 Metrics Tracked
+
+| Metric | Source |
+|--------|--------|
+| val_bpb @ S200/S400/S600/FINAL | `val_bpb` in log |
+| Average step time | Last 20 `dt:` entries |
+| Peak VRAM alloc | `peak_alloc_gib` in log |
+| Total steps in 600s | `[stop]` line step count |
+
+### 13.4 Expected Trade-off
+
+```
+VRAM saved  ↑                           VRAM used  ↑
+            │  encoder_grouped          decoder/off
+            │  full                     alternate
+            │  encoder ← current        │
+            └─────────────────────────────────────→
+            Less steps                   More steps
+```
+
+The winner is the mode that saves enough VRAM to bump `MICRO_BATCH_TOKENS` to 250k without exceeding 600ms/step.
+
+### 13.5 How to Run
+
+```bash
+# On 3090 (WSL):
+bash sweep_checkpointing.sh 2>&1 | tee checkpoint_results.txt
+
+# On 5090 RunPod:
+chmod +x sweep_checkpointing.sh && bash sweep_checkpointing.sh
+```
+
+Results written to `/tmp/checkpoint_sweep_200k/summary.txt`.
+
+
