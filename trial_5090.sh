@@ -54,10 +54,10 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 524k tokens/step — full micro-batch (grad_accum=1)
+# Batch: 65k tokens/step — safe for 24GB RTX 3090 (grad_accum=1)
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-524288}"
-export TRAIN_BATCH_TOKENS=524288
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
+export TRAIN_BATCH_TOKENS=65536
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
