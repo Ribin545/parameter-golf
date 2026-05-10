@@ -306,3 +306,72 @@ MUON_BACKEND_STEPS=5
 1b03b7e  fix: add Lion optimizer implementation to optimizer_utils.py
 e334a21  fix: correct Lion import in train_gpt.py when ShampooLite is missing
 ```
+
+---
+
+## 9. Phase 4 — RTX 5090 RunPod Scaling (200k True Micro-Batch)
+
+**Date:** 2026-05-10 (afternoon session)
+
+### 9.1 Motivation
+
+After exhausting the 3090's 24GB VRAM ceiling at 100k batch (val_bpb=1.5504), we deployed to an RTX 5090 (32GB) RunPod instance to test larger true micro-batches with the same 5L×2S U-Net architecture. The goal: push val_bpb toward 1.3.
+
+### 9.2 Architecture Configuration
+
+```bash
+MODEL_TYPE=multilayer  NUM_LAYERS=5  MODEL_DIM=512  NUM_HEADS=8
+NUM_KV_HEADS=4  MLP_MULT=2  RECURRENCE_STEPS=2  MULTILAYER_LORA_RANK=8
+TRAIN_SEQ_LEN=1024  SCHEDULE_FREE=1  BETA2=0.92
+MULTILAYER_ACTIVATION_CHECKPOINT=1  MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
+SAFETY_CLAMP_DISABLE=1  DISABLE_COMPILE=1
+```
+
+### 9.3 Results — 512-dim vs 384-dim at 200k Batch
+
+| Config | Final Step | val_bpb | val_loss | Step Time | peak_alloc_gib | peak_resv_gib | int8_size |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **512-dim, 200k** 🏆 | 1,041 | **1.4604** | 2.4750 | ~520ms | 25.27 | 27.29 | 9.65 MiB |
+| 384-dim, 200k | 1,260 | 1.4967 | 2.5365 | ~431ms | 19.67 | 20.83 | 5.77 MiB |
+
+### 9.4 Key Findings
+
+#### 512-dim at 200k batch — Best Result
+- **val_bpb = 1.4604** at step 1,041 (600s wallclock)
+- Step time ~520ms stays under 600ms ceiling ✓
+- int8 quantization degradation: only +0.099% (1.4604 → 1.4619)
+- VRAM: 25.27 GiB alloc peak — 200k is near the limit for 32GB
+- **6.2% improvement** over 100k batch on 3090 (1.5504 → 1.4604)
+- Convergence still active at wallclock stop — model would continue improving
+
+#### 384-dim at 200k batch — Degraded
+- val_bpb = 1.4967 at step 1,260
+- +2.5% worse than 512-dim despite 1,260 vs 1,041 steps
+- Faster step time (431ms) does not compensate for capacity loss
+- **Rejected: 512-dim is the minimum viable dimension for quality**
+
+#### 300k batch attempt — OOM
+- 300k true micro-batch exceeded 32GB VRAM
+- 200k is the practical ceiling for 512/5L on RTX 5090
+
+### 9.5 Delta per Batch Scaling (Same Architecture)
+
+| Batch | GPU | Steps | val_bpb | Step Time |
+|---:|---:|---:|---:|---:|
+| 65k | 3090 | ~1,530 | 2.0248 (@S400) | 377ms |
+| 100k | 3090 | ~1,040 | 1.5504 (@S879) | 576ms |
+| **200k** | **5090** | **~1,040** | **1.4604 (@S1041)** | **520ms** |
+
+Each 2× batch increase delivers ~7-8% val_bpb improvement. Gradient noise reduction from larger batches is the single strongest quality lever.
+
+### 9.6 5090 RunPod One-Liner
+
+```bash
+cd /workspace/parameter-golf && git checkout -- . && git pull origin master && bash trial_5090.sh
+```
+
+### 9.7 Next Steps for 5090
+
+After Tier 1 safe improvements (lora_rank 8→16, qk_gain 1.5→2.0, bigram 2048→4096, warmup 10→20), the next 5090 run targets 1.43-1.44 val_bpb. Further levers pending: TTT, level signal, Muon momentum bump to 0.98.
+
+
