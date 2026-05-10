@@ -391,6 +391,7 @@ def main() -> None:
             bigram_hash_size=args.bigram_hash_size,
             bigram_hash_scale=args.bigram_hash_scale,
             lora_rank=args.multilayer_lora_rank,
+            recurrent_attn_every=args.recurrent_attn_every,
         ).to(device).bfloat16()
         # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
         # Use 'default' mode: enables Inductor kernel fusion without CUDA graph

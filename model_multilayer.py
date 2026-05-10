@@ -259,7 +259,7 @@ class Block(nn.Module):
         self.attn_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.resid_mix = nn.Parameter(torch.stack((torch.ones(dim), torch.zeros(dim))).float())
-    def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0) -> Tensor:
+    def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0, attend: bool = True) -> Tensor:
         # Tier 2 audit change: these tensors are tiny; recompute casts instead of
         # keeping persistent cached mirrors on GPU.
         mix = self.resid_mix if self.resid_mix.dtype == x.dtype else self.resid_mix.to(dtype=x.dtype)
@@ -270,8 +270,10 @@ class Block(nn.Module):
         mlp_scale_v = mlp_scale[None, None, :]
         x = mix0 * x + mix1 * x0
         # BUG FIX: propagate step_idx so per-step LoRA actually varies across recurrence steps
-        attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
-        x = x + attn_scale_v * attn_out
+        # ATTENTION GATE: when attend=False, skip attention entirely — MLP-only refine step
+        if attend:
+            attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
+            x = x + attn_scale_v * attn_out
         x = x + mlp_scale_v * self.mlp(self.mlp_norm(x))
         return x
 
@@ -284,7 +286,8 @@ class GPTMultiLayer(nn.Module):
                  num_steps: int = 1,
                  logit_softcap: float = 30.0, rope_base: float = 10000.0,
                  qk_gain_init: float = 1.5, bigram_hash_size: int = 2048,
-                 bigram_hash_scale: float = 0.05, lora_rank: int = 0):
+                 bigram_hash_scale: float = 0.05, lora_rank: int = 0,
+                 recurrent_attn_every: int = 1):
         super().__init__()
         self.tie_embeddings = tie_embeddings
         self.tied_embed_init_std = tied_embed_init_std
@@ -292,6 +295,7 @@ class GPTMultiLayer(nn.Module):
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
+        self.recurrent_attn_every = max(1, int(recurrent_attn_every))
         self.activation_checkpointing = os.environ.get("MULTILAYER_ACTIVATION_CHECKPOINT", "0") == "1"
         self.activation_checkpoint_mode = os.environ.get("MULTILAYER_ACTIVATION_CHECKPOINT_MODE", "full").strip().lower()
 
@@ -339,18 +343,30 @@ class GPTMultiLayer(nn.Module):
             return (block_idx % 2) == 1
         return True
 
-    def _run_block(self, block: Block, block_idx: int, x: Tensor, x0: Tensor, step_idx: int) -> Tensor:
+    def _step_uses_attention(self, step_idx: int) -> bool:
+        """Safe skip: attend on step 0, MLP-only refine on later steps.
+        
+        With recurrent_attn_every=2 and 2 steps: step 0 attends, step 1 is MLP-only.
+        The last-step safety guard only kicks in if recurrent_attn_every=1 (default).
+        """
+        if self.recurrent_attn_every <= 1 or self.num_steps <= 1:
+            return True
+        return (step_idx % self.recurrent_attn_every) == 0
+
+    def _run_block(self, block: Block, block_idx: int, x: Tensor, x0: Tensor, step_idx: int,
+                   attend: bool = True) -> Tensor:
         if self._should_checkpoint_block(block_idx) and self.training and torch.is_grad_enabled():
             return checkpoint(
-                lambda a, b: block(a, b, step_idx=step_idx),
+                lambda a, b: block(a, b, step_idx=step_idx, attend=attend),
                 x,
                 x0,
                 use_reentrant=False,
                 preserve_rng_state=False,
             )
-        return block(x, x0, step_idx=step_idx)
+        return block(x, x0, step_idx=step_idx, attend=attend)
 
-    def _run_encoder_stage(self, x: Tensor, x0: Tensor, step_idx: int) -> tuple[Tensor, list[Tensor]]:
+    def _run_encoder_stage(self, x: Tensor, x0: Tensor, step_idx: int,
+                           attend: bool = True) -> tuple[Tensor, list[Tensor]]:
         if (
             self.activation_checkpointing
             and self.activation_checkpoint_mode == "encoder_grouped"
@@ -361,7 +377,7 @@ class GPTMultiLayer(nn.Module):
                 out = a
                 skips: list[Tensor] = []
                 for i in range(self.num_encoder_layers):
-                    out = self.blocks[i](out, b, step_idx=step_idx)
+                    out = self.blocks[i](out, b, step_idx=step_idx, attend=attend)
                     skips.append(out)
                 return (out, *skips)
 
@@ -377,7 +393,7 @@ class GPTMultiLayer(nn.Module):
         skips: list[Tensor] = []
         out = x
         for i in range(self.num_encoder_layers):
-            out = self._run_block(self.blocks[i], i, out, x0, step_idx=step_idx)
+            out = self._run_block(self.blocks[i], i, out, x0, step_idx=step_idx, attend=attend)
             skips.append(out)
         return out, skips
 
@@ -400,17 +416,18 @@ class GPTMultiLayer(nn.Module):
                 skip_w = skip_w.to(dtype=x.dtype)
             _skip_cached.append(skip_w[None, None, :])
 
-        # BUG FIX: propagate step_idx so each recurrence pass uses distinct per-step LoRA
+        # ATTENTION GATE: step 0 = full attn+MLP, step 1 = MLP-only refine
         for step in range(self.num_steps):
+            attend = self._step_uses_attention(step)
             # Encoder: store skips
-            x, skips = self._run_encoder_stage(x, x0, step_idx=step)
+            x, skips = self._run_encoder_stage(x, x0, step_idx=step, attend=attend)
 
             # Decoder: consume skips in reverse order
             for i in range(self.num_decoder_layers):
                 if skips and i < self.num_skip_weights:
                     x = x + _skip_cached[i] * skips.pop()
                 block_idx = self.num_encoder_layers + i
-                x = self._run_block(self.blocks[block_idx], block_idx, x, x0, step_idx=step)
+                x = self._run_block(self.blocks[block_idx], block_idx, x, x0, step_idx=step, attend=attend)
 
         x = self.final_norm(x)
         if self.tie_embeddings:

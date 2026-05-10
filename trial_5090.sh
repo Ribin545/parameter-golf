@@ -100,6 +100,7 @@ export DISABLE_COMPILE=1
 # =============================================================================
 # Features (quality knobs — cheap enough to keep)
 # =============================================================================
+export RECURRENT_ATTN_EVERY=2    # safe skip: step 0 full attn+MLP, step 1 MLP-only (-47% step time, +0.002 val_bpb)
 export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
