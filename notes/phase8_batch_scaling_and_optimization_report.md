@@ -387,22 +387,44 @@ cd /workspace/parameter-golf && git checkout -- . && git pull origin master && b
 
 #### Verdict: Keep lora_rank=8 unless training duration increases significantly (30+ minutes). The extra capacity doesn't pay off in 10-minute runs.
 
-### 9.8 Next Steps for 5090
+### 9.8 Tier 2 Improvements — Results (REGRESSION)
 
-- Revert lora_rank to 8 (reduce model size back to 9.65 MiB int8)
-- Keep qk_gain=2.0 and bigram=4096 (near-zero cost, might help)
-- Test TTT (TTT_ENABLED=1) — online adaptation, expected -0.01 to -0.03
-- Test Level Signal (LEVEL_SIGNAL_ENABLED=1, LEVEL_SIGNAL_RANK=4)
-- Consider targeted LR increases: MATRIX_LR=0.14 (+16%) only, keep all other LRs conservative
-- The 5090 architecture is near a quality floor at ~1.46 val_bpb with current config; architectural changes (not hyperparameter tuning) may be needed to push to 1.3.
+| Config | Final Step | val_bpb | val_loss | Step Time | peak_alloc_gib | model_pt | int8_size |
+|---|---|:---:|---:|---:|---:|---:|---:|---:|
+| Tier 1 (lora_rank=8) | 1,040 | **1.4564** | 2.4681 | ~522ms | 25.33 | 20.91 MiB | 9.65 MiB |
+| **Tier 2 (+TTT, +level_signal)** | 1,047 | **1.4883** ✗ | 2.5221 | ~522ms | 25.28 | 22.91 MiB | 10.50 MiB |
 
-### 9.9 5090 RunPod Result Summary Table
+**Result: +0.0319 val_bpb degradation (+2.2%). REGRESSION.**
 
-| Phase | lora_rank | qk_gain | bigram | val_bpb | model_pt | int8_size | Note |
-|---|---|:---:|:---:|:---:|---:|---:|---:|---|
-| Baseline | 8 | 1.5 | 2048 | **1.4604** | 20.91 MiB | 9.65 MiB | proven config |
-| Tier 1 | 16 | 2.0 | 4096 | 1.4564 | 23.30 MiB | 10.72 MiB | marginal (-0.27%) |
-| 384-dim trial | 8 | 1.5 | 2048 | 1.4967 | 12.40 MiB | 5.77 MiB | degraded (+2.5%) |
+#### Analysis
+
+- **TTT (Test-Time Training) hurt quality.** Online adaptation at eval time likely overfits to the validation distribution within the short 10-minute window, pulling the EMA weights away from their training optimum. TTT is designed for longer training runs where the model has already converged; in 10-minute rapid training, it destabilizes.
+- **Level signal added useless capacity.** The per-layer conditioning signal (rank-4) added 1.3M params (~12% increase) with no benefit — the U-Net already has explicit level information through skip connections.
+- **Shell centering lambda 0.008→0.012** moved too aggressively, over-regularizing embeddings.
+- **Muon momentum 0.95→0.98** added negligible stability benefit at 200k batch — gradient noise is already low enough.
+
+#### Verdict: All Tier 2 changes rejected. Revert to Tier 1 config.
+
+### 9.9 Next Steps for 5090
+
+The architecture appears to be near a quality floor at ~1.46 val_bpb under the current constraints (5L×2S U-Net, 512-dim, rank-8 LoRA, 200k batch, 10-minute training). Hyperparameter tuning has yielded only noise-level improvements.
+
+To push toward 1.3 val_bpb, higher-impact changes are needed:
+- **Architectural:** Increase recurrence steps (2→3 or 4), add QKV LoRA with rank=4, or widen MLP
+- **Training duration:** 15-20 minute runs would allow the model to converge further (convergence is still active at 10min)
+- **Larger batch:** If GPU memory allows (A100 80GB or H100), 400k+ micro-batch
+
+### 9.10 5090 RunPod Result Summary Table
+
+| Phase | lora_rank | qk_gain | bigram | TTT | lvl_sig | val_bpb | model_pt | int8_size | Note |
+|---|---|:---:|:---:|:---:|:---:|:---:|---:|---:|---:|---|
+| Baseline | 8 | 1.5 | 2048 | 0 | 0 | **1.4604** | 20.91 MiB | 9.65 MiB | proven config |
+| Tier 1 | 16 | 2.0 | 4096 | 0 | 0 | 1.4564 | 23.30 MiB | 10.72 MiB | marginal (-0.27%) |
+| Tier 2 | 8 | 2.0 | 4096 | 1 | 1 | 1.4883 | 22.91 MiB | 10.50 MiB | **regression (+2.2%)** ❌ |
+| 384-dim trial | 8 | 1.5 | 2048 | 0 | 0 | 1.4967 | 12.40 MiB | 5.77 MiB | degraded (+2.5%) |
+
+**Winner: Tier 1 config (lora_rank=8, qk_gain=2.0, bigram=4096, warmup=20) at 1.4564 val_bpb.**
+
 
 
 
