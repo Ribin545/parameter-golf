@@ -282,7 +282,7 @@ def main() -> None:
         if _gpu_mem_gib >= 30:       # 5090 (32GB) or A6000 (48GB)
             _max_safe_ubatch = 262144
         elif _gpu_mem_gib >= 22:     # 3090/4090 (24GB)
-            _max_safe_ubatch = 65536
+            _max_safe_ubatch = 102400
         else:                         # lower VRAM GPUs
             _max_safe_ubatch = 32768
     else:
