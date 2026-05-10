@@ -74,6 +74,7 @@ export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
 export MUON_BACKEND_STEPS=5
 export MUON_MOMENTUM=0.95
+export BETA2=0.92    # locked: -2.2% val_bpb (faster variance adaptation)
 
 # =============================================================================
 # Weight decay
@@ -113,8 +114,9 @@ export DROPOUT_P=0.4
 export LABEL_SMOOTHING=0.15
 
 # =============================================================================
-# Scheduler + stopping
+# Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
 # =============================================================================
+export SCHEDULE_FREE=1
 export WARMUP_STEPS=10
 export VAL_LOSS_EVERY=200
 export SAVE_BEST_CHECKPOINT=1
