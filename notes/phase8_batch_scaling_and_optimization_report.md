@@ -370,8 +370,39 @@ Each 2× batch increase delivers ~7-8% val_bpb improvement. Gradient noise reduc
 cd /workspace/parameter-golf && git checkout -- . && git pull origin master && bash trial_5090.sh
 ```
 
-### 9.7 Next Steps for 5090
+### 9.7 Tier 1 Safe Improvements — Results
 
-After Tier 1 safe improvements (lora_rank 8→16, qk_gain 1.5→2.0, bigram 2048→4096, warmup 10→20), the next 5090 run targets 1.43-1.44 val_bpb. Further levers pending: TTT, level signal, Muon momentum bump to 0.98.
+| Config | Final Step | val_bpb | val_loss | Step Time | peak_alloc_gib | model_pt | int8_size |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Conservative (lora_rank=8) | 1,041 | 1.4604 | 2.4750 | ~520ms | 25.27 | 20.91 MiB | 9.65 MiB |
+| **Tier 1 (lora_rank=16)** | 1,040 | **1.4564** | 2.4681 | ~522ms | 25.33 | 23.30 MiB | 10.72 MiB |
+
+**Result: -0.004 val_bpb improvement (+0.27%).**
+
+#### Analysis
+
+- **Marginal gain.** Doubling LoRA rank from 8→16 (0.4M→0.8M LoRA params) delivered only a 0.27% bpb improvement — effectively noise-level given run-to-run variance.
+- **Model size grew 11.4%** (20.91 → 23.30 MiB FP, 9.65 → 10.72 MiB int8) for near-zero quality gain.
+- The 10-minute training window likely doesn't provide enough steps to converge the extra LoRA parameters. rank-8 already provides sufficient per-step adapter capacity for 2 recurrence steps × 5 layers.
+
+#### Verdict: Keep lora_rank=8 unless training duration increases significantly (30+ minutes). The extra capacity doesn't pay off in 10-minute runs.
+
+### 9.8 Next Steps for 5090
+
+- Revert lora_rank to 8 (reduce model size back to 9.65 MiB int8)
+- Keep qk_gain=2.0 and bigram=4096 (near-zero cost, might help)
+- Test TTT (TTT_ENABLED=1) — online adaptation, expected -0.01 to -0.03
+- Test Level Signal (LEVEL_SIGNAL_ENABLED=1, LEVEL_SIGNAL_RANK=4)
+- Consider targeted LR increases: MATRIX_LR=0.14 (+16%) only, keep all other LRs conservative
+- The 5090 architecture is near a quality floor at ~1.46 val_bpb with current config; architectural changes (not hyperparameter tuning) may be needed to push to 1.3.
+
+### 9.9 5090 RunPod Result Summary Table
+
+| Phase | lora_rank | qk_gain | bigram | val_bpb | model_pt | int8_size | Note |
+|---|---|:---:|:---:|:---:|---:|---:|---:|---|
+| Baseline | 8 | 1.5 | 2048 | **1.4604** | 20.91 MiB | 9.65 MiB | proven config |
+| Tier 1 | 16 | 2.0 | 4096 | 1.4564 | 23.30 MiB | 10.72 MiB | marginal (-0.27%) |
+| 384-dim trial | 8 | 1.5 | 2048 | 1.4967 | 12.40 MiB | 5.77 MiB | degraded (+2.5%) |
+
 
 

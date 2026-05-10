@@ -51,7 +51,7 @@ export NUM_HEADS=8
 export NUM_KV_HEADS=4
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=16
+export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
 # Batch: 200k tokens/step — true micro-batch, no grad accum (300k OOM'd)
