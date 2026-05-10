@@ -62,25 +62,25 @@ export TRAIN_BATCH_TOKENS=204800
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: Muon + AdamW — aggressively tuned for fast convergence
+# Optimizer: Muon + AdamW — aggressive LR push for 1.3 bpb target
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.12
-export SCALAR_LR=0.03
-export LORA_LR=0.03
-export CONTROL_LR=0.03
-export EMBED_LR=0.3
-export HEAD_LR=0.008
-export TIED_EMBED_LR=0.03
-export MUON_BACKEND_STEPS=5
+export MATRIX_LR=0.20
+export SCALAR_LR=0.05
+export LORA_LR=0.05
+export CONTROL_LR=0.05
+export EMBED_LR=0.5
+export HEAD_LR=0.012
+export TIED_EMBED_LR=0.05
+export MUON_BACKEND_STEPS=8
 export MUON_MOMENTUM=0.95
-export BETA2=0.92    # locked: -2.2% val_bpb (faster variance adaptation)
+export BETA2=0.90    # aggressive: faster variance adaptation
 
 # =============================================================================
 # Weight decay
 # =============================================================================
-export SCALAR_WEIGHT_DECAY=0.2
+export SCALAR_WEIGHT_DECAY=0.10
 export LORA_WEIGHT_DECAY=0.0
 export CONTROL_WEIGHT_DECAY=0.0
 
@@ -113,8 +113,8 @@ export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.4
-export LABEL_SMOOTHING=0.15
+export DROPOUT_P=0.25
+export LABEL_SMOOTHING=0.08
 
 # =============================================================================
 # Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
@@ -127,7 +127,7 @@ export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
 export EXPORT_BEST_CHECKPOINT=1
 export SEQ_LEN_CURRICULUM=0
-export RECURRENCE_CURRICULUM=0
+export RECURRENCE_CURRICULUM=1
 
 # =============================================================================
 # Data determinism
