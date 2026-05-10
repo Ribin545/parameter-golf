@@ -28,6 +28,41 @@ def zeropower_via_newtonschulz5(G: Tensor, steps: int = 3, eps: float = 1e-7) ->
     return X.to(dtype)
 
 
+class Lion(torch.optim.Optimizer):
+    """Lion optimizer — sign-based updates with momentum. Fast convergence for small models."""
+    def __init__(self, params, lr=1e-4, betas=(0.9, 0.99), weight_decay=0.0):
+        if lr < 0.0:
+            raise ValueError(f"Invalid lr: {lr}")
+        defaults = dict(lr=lr, betas=betas, weight_decay=weight_decay)
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            with torch.enable_grad():
+                loss = closure()
+        for group in self.param_groups:
+            beta1, beta2 = group["betas"]
+            lr = group["lr"]
+            wd = group["weight_decay"]
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                g = p.grad
+                state = self.state[p]
+                if "exp_avg" not in state:
+                    state["exp_avg"] = torch.zeros_like(p)
+                exp_avg = state["exp_avg"]
+                # Lion update: m = beta1*m + (1-beta1)*g; update = lr * sign(beta2*m + (1-beta2)*g)
+                exp_avg.mul_(beta1).add_(g, alpha=1 - beta1)
+                update = exp_avg.mul(beta2).add(g, alpha=1 - beta2)
+                p.add_(update.sign(), alpha=-lr)
+                if wd > 0:
+                    p.add_(p, alpha=-lr * wd)
+        return loss
+
+
 class Muon(torch.optim.Optimizer):
     def __init__(self, params, lr: float, momentum: float, backend_steps: int, nesterov: bool = True):
         super().__init__(
