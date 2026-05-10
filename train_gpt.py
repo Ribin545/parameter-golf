@@ -302,7 +302,7 @@ def main() -> None:
             _max_safe_ubatch = 32768
     else:
         _max_safe_ubatch = 524288
-    if args.micro_batch_tokens > _max_safe_ubatch:
+    if args.micro_batch_tokens > _max_safe_ubatch and os.environ.get("SAFETY_CLAMP_DISABLE") != "1":
         args.micro_batch_tokens = _max_safe_ubatch
         grad_accum_steps = max(1, args.train_batch_tokens // (args.micro_batch_tokens * world_size))
         log0(f"[vram] clamped MICRO_BATCH_TOKENS={args.micro_batch_tokens} grad_accum_steps={grad_accum_steps} (GPU={_gpu_mem_gib:.0f}GiB, max_safe={_max_safe_ubatch})")

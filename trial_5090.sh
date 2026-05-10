@@ -54,10 +54,11 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 100k tokens/step — push VRAM to edge for quality (grad_accum=1)
+# Batch: 200k tokens/step — true micro-batch, no grad accum
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-102400}"
-export TRAIN_BATCH_TOKENS=102400
+export SAFETY_CLAMP_DISABLE=1
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-204800}"
+export TRAIN_BATCH_TOKENS=204800
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
