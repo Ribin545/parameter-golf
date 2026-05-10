@@ -42,19 +42,19 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 5L×2S (384-dim with LoRA)
+# Architecture: Multilayer U-Net 5L×2S (384-dim with rank-256 LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
-export NUM_LAYERS=9
-export MODEL_DIM=256
+export NUM_LAYERS=5
+export MODEL_DIM=384
 export NUM_HEADS=6
 export NUM_KV_HEADS=3
-export MLP_MULT=4
+export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=64
+export MULTILAYER_LORA_RANK=256
 
 # =============================================================================
-# Batch: 524k tokens/step — micro-batch reduced for VRAM safety (618 MB headroom)
+# Batch: 524k tokens/step — micro-batch reduced for VRAM safety
 # =============================================================================
 export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-131072}"
 export TRAIN_BATCH_TOKENS=524288
@@ -65,20 +65,20 @@ export TRAIN_SEQ_LEN=1024
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.242
-export SCALAR_LR=0.12
-export LORA_LR=0.12
-export CONTROL_LR=0.12
-export EMBED_LR=0.6
-export HEAD_LR=0.032
-export TIED_EMBED_LR=0.12
-export MUON_BACKEND_STEPS=6
-export MUON_MOMENTUM=0.99
+export MATRIX_LR=0.12
+export SCALAR_LR=0.03
+export LORA_LR=0.03
+export CONTROL_LR=0.03
+export EMBED_LR=0.3
+export HEAD_LR=0.008
+export TIED_EMBED_LR=0.03
+export MUON_BACKEND_STEPS=3
+export MUON_MOMENTUM=0.95
 
 # =============================================================================
 # Weight decay
 # =============================================================================
-export SCALAR_WEIGHT_DECAY=0.0
+export SCALAR_WEIGHT_DECAY=0.2
 export LORA_WEIGHT_DECAY=0.0
 export CONTROL_WEIGHT_DECAY=0.0
 
@@ -88,7 +88,7 @@ export CONTROL_WEIGHT_DECAY=0.0
 export DYNAMIC_LR_NORM=1
 export TARGET_GRAD_NORM=0.5
 export GRAD_CLIP_NORM=1.0
-export QK_GAIN_INIT=4.0
+export QK_GAIN_INIT=1.5
 
 # =============================================================================
 # torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
@@ -102,9 +102,9 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=2048
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
-export SHELL_CENTERING_LAM=0.128
+export SHELL_CENTERING_LAM=0.008
 export TIE_EMBEDDINGS=1
-export TIED_EMBED_INIT_STD=0.015
+export TIED_EMBED_INIT_STD=0.005
 
 # =============================================================================
 # Regularization
