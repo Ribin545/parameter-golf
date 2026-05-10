@@ -31,6 +31,24 @@ except Exception:
     triton_fused_relu2 = None
 
 
+class ShellCenteringPenalty(nn.Module):
+    """Regularises embeddings to stay outside a shell of radius ~sqrt(d-0.1)
+    while keeping the centroid near the origin. Prevents drift/collapse.
+    From: https://github.com/openai/parameter-golf/issues/2045
+    """
+    def __init__(self, d_model: int, lam: float = 0.008):
+        super().__init__()
+        self.lam = lam
+        self.d_model = d_model
+        self.penalty: Tensor | None = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        norms = x.norm(dim=-1, p=2)
+        self.penalty = self.lam * (((2 * self.d_model / ((norms ** 2) + 0.1)) ** 0.5) - 1).clamp(min=0).mean()
+        norm_of_mean = x.flatten(0, 1).mean(dim=0).norm(p=2)
+        self.penalty = self.penalty + self.lam * ((norm_of_mean ** 2) / (self.d_model ** 0.5))
+        return x
+
 # ─── CastedLinear: fp32 weights, bf16 compute ───
 class CastedLinear(nn.Linear):
     def __init__(self, *args, **kwargs):
@@ -287,11 +305,22 @@ class GPTMultiLayer(nn.Module):
                  logit_softcap: float = 30.0, rope_base: float = 10000.0,
                  qk_gain_init: float = 1.5, bigram_hash_size: int = 2048,
                  bigram_hash_scale: float = 0.05, lora_rank: int = 0,
-                 recurrent_attn_every: int = 1):
+                 recurrent_attn_every: int = 1,
+                 shell_centering_enabled: bool = False,
+                 shell_centering_lam: float = 0.008,
+                 label_smoothing: float = 0.0,
+                 z_loss_lambda: float = 0.0):
         super().__init__()
         self.tie_embeddings = tie_embeddings
         self.tied_embed_init_std = tied_embed_init_std
         self.logit_softcap = logit_softcap
+        self.label_smoothing = float(label_smoothing)
+        self.z_loss_lambda = float(z_loss_lambda)
+        self.shell_centering_enabled = bool(shell_centering_enabled)
+        self.shell_centering = (
+            ShellCenteringPenalty(model_dim, lam=shell_centering_lam)
+            if self.shell_centering_enabled else None
+        )
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
@@ -405,6 +434,8 @@ class GPTMultiLayer(nn.Module):
         """
         x = self.tok_emb(input_ids)
         x = x + self.bigram_hash(input_ids)
+        if self.shell_centering is not None:
+            x = self.shell_centering(x)
         x = F.rms_norm(x, (x.size(-1),))
         x0 = x
 
@@ -439,8 +470,16 @@ class GPTMultiLayer(nn.Module):
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
         logits = self.forward_logits(input_ids)
-        return F.cross_entropy(
+        loss = F.cross_entropy(
             logits.reshape(-1, logits.size(-1)).float(),
             target_ids.reshape(-1),
             reduction="mean",
+            label_smoothing=self.label_smoothing,
         )
+        if self.shell_centering is not None:
+            loss = loss + self.shell_centering.penalty.to(loss.dtype)
+        if self.z_loss_lambda > 0:
+            log_z = torch.logsumexp(logits.reshape(-1, logits.size(-1)).float(), dim=-1)
+            z_loss = self.z_loss_lambda * (log_z ** 2).mean()
+            loss = loss + z_loss
+        return loss

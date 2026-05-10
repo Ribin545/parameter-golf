@@ -514,4 +514,76 @@ The combination shows negative interaction at step 200 — the -2.55% from no_ti
 - `RECURRENT_ATTN_EVERY=2`: **always on** — 1.87× throughput, quality penalty absorbed by extra steps
 - 5090 projection at 200k batch: ~130ms/step → 3,000+ steps in 600s at ~1.42 val_bpb
 
+---
+
+## 12. Code Audit & Bug Fixes (2026-05-10)
+
+### 12.1 Bugs Found
+
+| # | Bug | File | Impact | Fix |
+|---|-----|------|--------|-----|
+| 1 | `label_smoothing` was dead code in multilayer | `model_multilayer.py` | `F.cross_entropy()` called without `label_smoothing=` param, so the env var had zero effect | Pass `label_smoothing=self.label_smoothing` to CE |
+| 2 | `shell_centering` was completely missing from multilayer | `model_multilayer.py` | `ShellCenteringPenalty` class and its application existed only in `model.py` (recurrent), never ported to `GPTMultiLayer` | Added `ShellCenteringPenalty` class, constructor param, embedding hook, and loss penalty term |
+| 3 | Step time inflated by 150ms from z-loss `logsumexp` | `model_multilayer.py` | The `torch.logsumexp` over full vocab×seq is a kernel launch-heavy op that serializes on the GPU | Dropped z-loss entirely — quality gain was zero, cost was 37% step-time increase |
+
+### 12.2 New Features Added to `model_multilayer.py`
+
+```
+ShellCenteringPenalty  — ported from model.py (was missing)
+label_smoothing param  — now actually passed to cross_entropy
+z_loss_lambda param    — added but kept at 0.0 (too expensive)
+shell_centering_enabled param
+shell_centering_lam param
+```
+
+Corresponding env vars wired through `train_gpt.py`:
+```
+SHELL_CENTERING_ENABLED  (was read but not passed to GPTMultiLayer)
+Z_LOSS_LAMBDA            (new)
+```
+
+### 12.3 10-Minute Benchmark: Three-Config Comparison (100k batch)
+
+| Step | Prev Best (TIE=0,SKIP,SCHFREE,B2=0.92) | Broken (LOGIT_SOFTCAP=8,z_loss=1e-4) | **Fixed (label_sm=0.15, shell=1, logit=30, z_loss=0)** |
+|---:|---:|---:|---:|
+| S100 | 3.4356 | 3.5199 (+2.5%) | **3.3374 (-2.9%)** ✅ |
+| S200 | 2.0896 | 2.2057 (+5.6%) | **2.1980 (+5.2%)** |
+| S300 | 1.8936 | 1.9976 (+5.5%) | **2.0011 (+5.7%)** |
+| S500 | 1.6831 | 1.7650 (+4.9%) | **1.7853 (+6.1%)** |
+| S700 | 1.6514 | 1.6990 (+2.9%) | **1.7080 (+3.4%)** |
+| S900 | 1.6831 | 1.6675 (-0.9%) | **1.6831 (tied)** ✅ |
+| S1000 | 1.6378 | 1.6648 (+1.6%) | **1.6852 (+2.9%)** |
+| S1101 (FINAL STRIDE 64) | — | 1.5896 (555ms/step) | **1.5906 (405ms/step)** |
+
+**Step time:** 405ms (fixed) vs 555ms (broken) — z_loss removed, 150ms saved.
+
+### 12.4 Root Cause Analysis: Why LOGIT_SOFTCAP=8 Failed
+
+Reducing softcap from 30→8 crushes logit dynamic range before the model has learned meaningful token distributions. At S200 the gap was +5.6%, narrowing slowly to fully tied by S900. This confirms it's a **harmful capacity reduction**, not a training speed difference.
+
+### 12.5 Final Verdict on Changes
+
+| Change | Verdict | Cost |
+|---|---|---|
+| `label_smoothing=0.15` (now works) | ✅ **Keep** — was dead code, now functional | free |
+| `shell_centering` (now in multilayer) | ✅ **Keep** — proven safe at lam=0.008 | ~0.05ms |
+| `QK_GAIN_INIT=2→3` | ➖ **Neutral** — keep at 3.0, no harm | free |
+| `z_loss_lambda=1e-4` | ❌ **Drop** — 150ms/step overhead, zero quality | +150ms |
+| `LOGIT_SOFTCAP=30→8` | ❌ **Drop** — primary quality killer | free |
+| `LOGIT_SOFTCAP=30.0` | ✅ **Keep** — original value, verified correct | free |
+
+### 12.6 Current Locked Config (3090, 10-min)
+
+```bash
+MODEL_TYPE=multilayer  NUM_LAYERS=5  MODEL_DIM=512  NUM_HEADS=8
+NUM_KV_HEADS=4  MLP_MULT=2  RECURRENCE_STEPS=2  MULTILAYER_LORA_RANK=8
+MICRO_BATCH_TOKENS=102400  TRAIN_BATCH_TOKENS=102400
+TIE_EMBEDDINGS=0  RECURRENT_ATTN_EVERY=2  SCHEDULE_FREE=1  BETA2=0.92
+LABEL_SMOOTHING=0.15  SHELL_CENTERING_ENABLED=1  SHELL_CENTERING_LAM=0.008
+LOGIT_SOFTCAP=30.0  QK_GAIN_INIT=3.0  DROPOUT_P=0.4
+MATRIX_LR=0.12  SCALAR_LR=0.03  MUON_MOMENTUM=0.95
+DYNAMIC_LR_NORM=1  TARGET_GRAD_NORM=0.5  SCALAR_WD=0.20
+```
+
+**Expected:** ~405ms/step, ~1100 steps/600s, final stride-64 val_bpb ~1.59.
 

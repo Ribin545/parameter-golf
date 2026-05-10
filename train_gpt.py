@@ -154,6 +154,7 @@ class Hyperparameters:
     parallel_residual = bool(int(os.environ.get("PARALLEL_RESIDUAL", "0")))
     dropout_p = float(os.environ.get("DROPOUT_P", "0.15"))
     label_smoothing = float(os.environ.get("LABEL_SMOOTHING", "0.05"))
+    z_loss_lambda = float(os.environ.get("Z_LOSS_LAMBDA", "0.0"))
     recurrent_attn_every = int(os.environ.get("RECURRENT_ATTN_EVERY", "1"))
     recurrent_refine_mlp_ratio = float(os.environ.get("RECURRENT_REFINE_MLP_RATIO", "1.0"))
     recurrent_attend_last = bool(int(os.environ.get("RECURRENT_ATTEND_LAST", "1")))
@@ -392,6 +393,10 @@ def main() -> None:
             bigram_hash_scale=args.bigram_hash_scale,
             lora_rank=args.multilayer_lora_rank,
             recurrent_attn_every=args.recurrent_attn_every,
+            shell_centering_enabled=args.shell_centering_enabled,
+            shell_centering_lam=args.shell_centering_lam,
+            label_smoothing=args.label_smoothing,
+            z_loss_lambda=args.z_loss_lambda,
         ).to(device).bfloat16()
         # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
         # Use 'default' mode: enables Inductor kernel fusion without CUDA graph
