@@ -592,6 +592,11 @@ DYNAMIC_LR_NORM=1  TARGET_GRAD_NORM=0.5  SCALAR_WD=0.20
 ## 13. PENDING: Activation Checkpointing Mode Sweep (200k batch, 10-min each)
 
 **Script:** `sweep_checkpointing.sh` | **Status:** 🟡 Pending execution
+**Git commits:**
+```
+d7db10d  feat: add activation checkpointing mode sweep script (6 modes × 10min each)
+bca70a5  docs: add section 13 — pending activation checkpointing mode sweep to phase 8 report
+```
 
 ### 13.1 Motivation
 
