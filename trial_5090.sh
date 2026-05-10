@@ -62,7 +62,7 @@ export TRAIN_BATCH_TOKENS=204800
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: Muon + AdamW — conservative LRs + tier 1 improvements
+# Optimizer: Muon + AdamW — conservative LRs + tier 2 improvements
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
@@ -74,7 +74,7 @@ export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
 export MUON_BACKEND_STEPS=5
-export MUON_MOMENTUM=0.95
+export MUON_MOMENTUM=0.98    # tier 2: more stable N-S iterations
 export BETA2=0.92    # locked: -2.2% val_bpb (faster variance adaptation)
 
 # =============================================================================
@@ -100,11 +100,15 @@ export DISABLE_COMPILE=1
 # =============================================================================
 # Features (quality knobs — cheap enough to keep)
 # =============================================================================
+export LEVEL_SIGNAL_ENABLED=1
+export LEVEL_SIGNAL_RANK=4
+export TTT_ENABLED=1
+export TTT_LR=0.0004
 export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
-export SHELL_CENTERING_LAM=0.008
+export SHELL_CENTERING_LAM=0.012
 export TIE_EMBEDDINGS=1
 export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
