@@ -19,9 +19,11 @@ PERFORMANCE AUDIT (2026-05-09):
 """
 from __future__ import annotations
 import math
+import os
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 try:
     from triton_mlp import fused_relu2 as triton_fused_relu2
@@ -125,6 +127,8 @@ class LoRALinear(nn.Module):
         self.num_steps = num_steps
         self.base = CastedLinear(in_features, out_features, bias=False)
         self._lora_cache: list[tuple[Tensor, Tensor]] | None = None
+        self._lora_cache_dtype: torch.dtype | None = None
+        self._lora_cache_version: tuple[int, int] | None = None
         if self.has_lora:
             self.lora_A = nn.Parameter(torch.empty(num_steps, out_features, rank, dtype=torch.float32))
             self.lora_B = nn.Parameter(torch.empty(num_steps, rank, in_features, dtype=torch.float32))
@@ -134,12 +138,19 @@ class LoRALinear(nn.Module):
                 nn.init.zeros_(self.lora_B[s])
 
     def _ensure_cache(self, dtype: torch.dtype) -> None:
-        """Build bf16 cache once; rebuild if dtype changes (shouldn't normally)."""
-        if self._lora_cache is None or (len(self._lora_cache) > 0 and self._lora_cache[0][0].dtype != dtype):
+        """Build bf16 cache lazily; rebuild on dtype or parameter updates."""
+        curr_version = (self.lora_A._version, self.lora_B._version)
+        if (
+            self._lora_cache is None
+            or self._lora_cache_dtype != dtype
+            or self._lora_cache_version != curr_version
+        ):
             self._lora_cache = [
                 (self.lora_A[s].to(dtype=dtype), self.lora_B[s].to(dtype=dtype))
                 for s in range(self.num_steps)
             ]
+            self._lora_cache_dtype = dtype
+            self._lora_cache_version = curr_version
 
     def forward(self, x: Tensor, step_idx: int = 0) -> Tensor:
         y = self.base(x)
@@ -175,15 +186,12 @@ class CausalSelfAttention(nn.Module):
         self.proj = LoRALinear(dim, dim, num_steps, lora_proj_rank)
         self.proj.base._zero_init = True
 
-        # Pre-cast q_gain to bf16 once to avoid .to(dtype) in forward
-        self._q_gain_bf16: Tensor | None = None
         self.q_gain = nn.Parameter(torch.full((num_heads,), qk_gain_init, dtype=torch.float32))
         self.rotary = Rotary(self.head_dim, base=rope_base)
 
     def _cached_q_gain(self, dtype: torch.dtype) -> Tensor:
-        if self._q_gain_bf16 is None or self._q_gain_bf16.dtype != dtype:
-            self._q_gain_bf16 = self.q_gain.to(dtype=dtype)[None, :, None, None]
-        return self._q_gain_bf16
+        # Tier 2 audit change: q_gain is tiny; avoid persistent GPU cache residency.
+        return self.q_gain.to(dtype=dtype)[None, :, None, None]
 
     def forward(self, x: Tensor, step_idx: int = 0) -> Tensor:
         bsz, seqlen, dim = x.shape
@@ -242,22 +250,13 @@ class Block(nn.Module):
         self.attn_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.resid_mix = nn.Parameter(torch.stack((torch.ones(dim), torch.zeros(dim))).float())
-        # Cached bf16 views of scale params (built lazily in _ensure_scale_cache)
-        self._scale_cache: tuple[Tensor, Tensor, Tensor, Tensor] | None = None
-
-    def _ensure_scale_cache(self, dtype: torch.dtype) -> None:
-        if self._scale_cache is None or self._scale_cache[0].dtype != dtype:
-            mix = self.resid_mix.to(dtype=dtype)
-            self._scale_cache = (
-                mix[0][None, None, :],
-                mix[1][None, None, :],
-                self.attn_scale.to(dtype=dtype)[None, None, :],
-                self.mlp_scale.to(dtype=dtype)[None, None, :],
-            )
-
     def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0) -> Tensor:
-        self._ensure_scale_cache(x.dtype)
-        mix0, mix1, attn_scale_v, mlp_scale_v = self._scale_cache
+        # Tier 2 audit change: these tensors are tiny; recompute casts instead of
+        # keeping persistent cached mirrors on GPU.
+        mix = self.resid_mix.to(dtype=x.dtype)
+        mix0, mix1 = mix[0][None, None, :], mix[1][None, None, :]
+        attn_scale_v = self.attn_scale.to(dtype=x.dtype)[None, None, :]
+        mlp_scale_v = self.mlp_scale.to(dtype=x.dtype)[None, None, :]
         x = mix0 * x + mix1 * x0
         # BUG FIX: propagate step_idx so per-step LoRA actually varies across recurrence steps
         attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
@@ -282,6 +281,8 @@ class GPTMultiLayer(nn.Module):
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
+        self.activation_checkpointing = os.environ.get("MULTILAYER_ACTIVATION_CHECKPOINT", "0") == "1"
+        self.activation_checkpoint_mode = os.environ.get("MULTILAYER_ACTIVATION_CHECKPOINT_MODE", "full").strip().lower()
 
         self.num_encoder_layers = num_layers // 2
         self.num_decoder_layers = num_layers - self.num_encoder_layers
@@ -311,6 +312,31 @@ class GPTMultiLayer(nn.Module):
             if isinstance(module, nn.Linear) and getattr(module, "_zero_init", False):
                 nn.init.zeros_(module.weight)
 
+    def _should_checkpoint_block(self, block_idx: int) -> bool:
+        if not self.activation_checkpointing:
+            return False
+        mode = self.activation_checkpoint_mode
+        if mode == "full":
+            return True
+        if mode == "decoder":
+            return block_idx >= self.num_encoder_layers
+        if mode == "encoder":
+            return block_idx < self.num_encoder_layers
+        if mode == "alternate":
+            return (block_idx % 2) == 1
+        return True
+
+    def _run_block(self, block: Block, block_idx: int, x: Tensor, x0: Tensor, step_idx: int) -> Tensor:
+        if self._should_checkpoint_block(block_idx) and self.training and torch.is_grad_enabled():
+            return checkpoint(
+                lambda a, b: block(a, b, step_idx=step_idx),
+                x,
+                x0,
+                use_reentrant=False,
+                preserve_rng_state=False,
+            )
+        return block(x, x0, step_idx=step_idx)
+
     def forward_logits(self, input_ids: Tensor, **kwargs) -> Tensor:
         """Return logits in shape [B, T, vocab].
 
@@ -332,14 +358,15 @@ class GPTMultiLayer(nn.Module):
             skips: list[Tensor] = []
             # Encoder: store skips
             for i in range(self.num_encoder_layers):
-                x = self.blocks[i](x, x0, step_idx=step)
+                x = self._run_block(self.blocks[i], i, x, x0, step_idx=step)
                 skips.append(x)
 
             # Decoder: consume skips in reverse order
             for i in range(self.num_decoder_layers):
                 if skips and i < self.num_skip_weights:
                     x = x + _skip_cached[i] * skips.pop()
-                x = self.blocks[self.num_encoder_layers + i](x, x0, step_idx=step)
+                block_idx = self.num_encoder_layers + i
+                x = self._run_block(self.blocks[block_idx], block_idx, x, x0, step_idx=step)
 
         x = self.final_norm(x)
         if self.tie_embeddings:

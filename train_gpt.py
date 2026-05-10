@@ -232,6 +232,22 @@ def _vram_str(stats: dict[str, float]) -> str:
             f"vram_peak_alloc_gib={stats['peak_alloc_gib']:.2f} vram_peak_resv_gib={stats['peak_resv_gib']:.2f}")
 
 
+def _swap_named_parameter_data(module: nn.Module, source_tensors: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Swap parameter .data references with source tensors and return originals."""
+    original: dict[str, torch.Tensor] = {}
+    for name, param in module.named_parameters():
+        if name in source_tensors:
+            original[name] = param.data
+            param.data = source_tensors[name]
+    return original
+
+
+def _restore_named_parameter_data(module: nn.Module, original_tensors: dict[str, torch.Tensor]) -> None:
+    for name, param in module.named_parameters():
+        if name in original_tensors:
+            param.data = original_tensors[name]
+
+
 def restore_low_dim_params_to_fp32(module: nn.Module) -> None:
     with torch.no_grad():
         for name, param in module.named_parameters():
@@ -684,11 +700,7 @@ def main() -> None:
             log0(f"[vram_eval] pre_swap step={step} alloc_gib={vram_pre['alloc_gib']:.2f} resv_gib={vram_pre['resv_gib']:.2f} peak_alloc_gib={vram_pre['peak_alloc_gib']:.2f} peak_resv_gib={vram_pre['peak_resv_gib']:.2f}")
 
             # Zero-copy EMA swap: swap .data references instead of cloning
-            ema_swap = {}
-            for n, p in base_model.named_parameters():
-                if n in model_ema:
-                    ema_swap[n] = p.data
-                    p.data = model_ema[n]
+            ema_swap = _swap_named_parameter_data(base_model, model_ema)
 
             vram_post_swap = _vram_stats(device)
             log0(f"[vram_eval] post_swap step={step} alloc_gib={vram_post_swap['alloc_gib']:.2f} resv_gib={vram_post_swap['resv_gib']:.2f} peak_alloc_gib={vram_post_swap['peak_alloc_gib']:.2f} peak_resv_gib={vram_post_swap['peak_resv_gib']:.2f}")
@@ -700,9 +712,7 @@ def main() -> None:
                                          ttt_lr=args.ttt_lr)
 
             # Restore trained weights by swapping .data references back
-            for n, p in base_model.named_parameters():
-                if n in ema_swap:
-                    p.data = ema_swap[n]
+            _restore_named_parameter_data(base_model, ema_swap)
 
             vram_post_restore = _vram_stats(device)
             log0(f"[vram_eval] post_restore step={step} alloc_gib={vram_post_restore['alloc_gib']:.2f} resv_gib={vram_post_restore['resv_gib']:.2f} peak_alloc_gib={vram_post_restore['peak_alloc_gib']:.2f} peak_resv_gib={vram_post_restore['peak_resv_gib']:.2f}")
@@ -718,11 +728,8 @@ def main() -> None:
                 best_step = step
                 best_ema = {n: p.clone() for n, p in model_ema.items()}
 
-                # Save best_model.pt using current EMA weights
-                original_params2 = {n: p.data.clone() for n, p in base_model.named_parameters()}
-                for n, p in base_model.named_parameters():
-                    if n in model_ema:
-                        p.data.copy_(model_ema[n])
+                # Save best_model.pt using current EMA weights without cloning the full model
+                best_swap = _swap_named_parameter_data(base_model, model_ema)
                 sd = base_model.state_dict()
                 sz_bytes = sum(v.numel() * v.element_size() for v in sd.values())
                 torch.save(sd, "best_model.pt.tmp")
@@ -744,8 +751,7 @@ def main() -> None:
                     int8_mib = len(payload) / (1024 ** 2)
                     log0(f"[best] int8_saved=best_model.int8.ptz ({int8_mib:.2f} MiB) int8_payload_bytes={len(payload)} baseline_bytes={sz_bytes}")
 
-                for n, p in base_model.named_parameters():
-                    p.data.copy_(original_params2[n])
+                _restore_named_parameter_data(base_model, best_swap)
 
             torch.cuda.synchronize()
             t0 = time.perf_counter()
@@ -928,11 +934,8 @@ def main() -> None:
         log0(f"[final] Export source: FINAL EMA weights")
         export_ema = model_ema
 
-    # Swap in export EMA weights
-    original_params_final = {n: p.data.clone() for n, p in base_model.named_parameters()}
-    for n, p in base_model.named_parameters():
-        if n in export_ema:
-            p.data.copy_(export_ema[n])
+    # Swap in export EMA weights without cloning the full model
+    export_swap = _swap_named_parameter_data(base_model, export_ema)
     final_sd = base_model.state_dict()
     sz_bytes = sum(v.numel() * v.element_size() for v in final_sd.values())
 
@@ -951,16 +954,13 @@ def main() -> None:
     log0(f"[final] Saved: final_model.int8.ptz ({len(payload)/(1024**2):.2f} MiB) int8_payload_bytes={len(payload)} baseline_bytes={sz_bytes}")
 
     # Restore original weights before quant_eval
-    for n, p in base_model.named_parameters():
-        p.data.copy_(original_params_final[n])
+    _restore_named_parameter_data(base_model, export_swap)
 
     # --- Quant eval: compare FP vs INT8 ---
     if args.quant_eval:
         log0(f"[final][quant_eval] running FP vs INT8(dequantized) validation ...")
         # Swap in export EMA for FP eval
-        for n, p in base_model.named_parameters():
-            if n in export_ema:
-                p.data.copy_(export_ema[n])
+        fp_eval_swap = _swap_named_parameter_data(base_model, export_ema)
         fp_loss, fp_bpb = eval_val(args, model, rank, world_size, device, grad_accum_steps,
                                    val_tokens, base_bytes_lut, has_leading_space_lut,
                                    is_boundary_token_lut,
@@ -981,9 +981,7 @@ def main() -> None:
         log0(f"[final][quant_eval] fp_val_loss={fp_loss:.6f} fp_val_bpb={fp_bpb:.6f} | int8_val_loss={int8_loss:.6f} int8_val_bpb={int8_bpb:.6f}")
         log0(f"[final][quant_eval] delta_loss={sign}{delta_loss:.6f} delta_bpb={sign}{delta_bpb:.6f} bpb_degradation_pct={sign}{pct:.3f}%")
         # Restore export EMA weights as final state
-        for n, p in base_model.named_parameters():
-            if n in export_ema:
-                p.data.copy_(export_ema[n])
+        _restore_named_parameter_data(base_model, fp_eval_swap)
 
     log0(f"[final] Export complete.")
 

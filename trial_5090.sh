@@ -106,6 +106,8 @@ export SHELL_CENTERING_ENABLED=1
 export SHELL_CENTERING_LAM=0.008
 export TIE_EMBEDDINGS=1
 export TIED_EMBED_INIT_STD=0.005
+export MULTILAYER_ACTIVATION_CHECKPOINT=1
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
 
 # =============================================================================
 # Regularization
@@ -147,6 +149,7 @@ run_training() {
     echo "  HEADS=$NUM_HEADS  KV_HEADS=$NUM_KV_HEADS  MLP_MULT=$MLP_MULT"
     echo "  BATCH: ${TRAIN_BATCH_TOKENS} tokens/step  (micro=${MICRO_BATCH_TOKENS})"
     echo "  OPTIM: $OPTIM_MODE  MuonNS=$MUON_BACKEND_STEPS"
+    echo "  CHECKPOINTING: enabled=${MULTILAYER_ACTIVATION_CHECKPOINT:-0} mode=${MULTILAYER_ACTIVATION_CHECKPOINT_MODE:-off}"
     echo "  FEATURES: Bigram=$BIGRAM_HASH_ENABLED  ShellCentering=$SHELL_CENTERING_ENABLED"
     echo "  Wallclock: ${wallclock}s  |  Max iters: $iters"
     echo "  torch.compile: $(if [ "${DISABLE_COMPILE:-0}" = "1" ]; then echo OFF; else echo "ON (default)"; fi)"
