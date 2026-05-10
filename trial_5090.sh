@@ -42,7 +42,7 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 5L×2S (384-dim with rank-256 LoRA)
+# Architecture: Multilayer U-Net 5L×2S (384-dim with rank-8 LoRA)
 # =============================================================================
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=5
@@ -51,12 +51,12 @@ export NUM_HEADS=6
 export NUM_KV_HEADS=3
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=256
+export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 524k tokens/step — micro-batch reduced for VRAM safety
+# Batch: 524k tokens/step — full micro-batch (grad_accum=1)
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-131072}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-524288}"
 export TRAIN_BATCH_TOKENS=524288
 export TRAIN_SEQ_LEN=1024
 
