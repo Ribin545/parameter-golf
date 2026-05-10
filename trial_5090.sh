@@ -51,7 +51,7 @@ export NUM_HEADS=8
 export NUM_KV_HEADS=4
 export MLP_MULT=2
 export RECURRENCE_STEPS=2
-export MULTILAYER_LORA_RANK=8
+export MULTILAYER_LORA_RANK=16
 
 # =============================================================================
 # Batch: 200k tokens/step — true micro-batch, no grad accum (300k OOM'd)
@@ -62,25 +62,25 @@ export TRAIN_BATCH_TOKENS=204800
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: Muon + AdamW — aggressive LR push for 1.3 bpb target
+# Optimizer: Muon + AdamW — conservative LRs + tier 1 improvements
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.20
-export SCALAR_LR=0.05
-export LORA_LR=0.05
-export CONTROL_LR=0.05
-export EMBED_LR=0.5
-export HEAD_LR=0.012
-export TIED_EMBED_LR=0.05
-export MUON_BACKEND_STEPS=8
+export MATRIX_LR=0.12
+export SCALAR_LR=0.03
+export LORA_LR=0.03
+export CONTROL_LR=0.03
+export EMBED_LR=0.3
+export HEAD_LR=0.008
+export TIED_EMBED_LR=0.03
+export MUON_BACKEND_STEPS=5
 export MUON_MOMENTUM=0.95
-export BETA2=0.90    # aggressive: faster variance adaptation
+export BETA2=0.92    # locked: -2.2% val_bpb (faster variance adaptation)
 
 # =============================================================================
 # Weight decay
 # =============================================================================
-export SCALAR_WEIGHT_DECAY=0.10
+export SCALAR_WEIGHT_DECAY=0.20
 export LORA_WEIGHT_DECAY=0.0
 export CONTROL_WEIGHT_DECAY=0.0
 
@@ -90,7 +90,7 @@ export CONTROL_WEIGHT_DECAY=0.0
 export DYNAMIC_LR_NORM=1
 export TARGET_GRAD_NORM=0.5
 export GRAD_CLIP_NORM=1.0
-export QK_GAIN_INIT=1.5
+export QK_GAIN_INIT=2.0
 
 # =============================================================================
 # torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
@@ -101,7 +101,7 @@ export DISABLE_COMPILE=1
 # Features (quality knobs — cheap enough to keep)
 # =============================================================================
 export BIGRAM_HASH_ENABLED=1
-export BIGRAM_HASH_SIZE=2048
+export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
 export SHELL_CENTERING_LAM=0.008
@@ -113,21 +113,21 @@ export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.25
-export LABEL_SMOOTHING=0.08
+export DROPOUT_P=0.4
+export LABEL_SMOOTHING=0.15
 
 # =============================================================================
 # Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
 # =============================================================================
 export SCHEDULE_FREE=1
-export WARMUP_STEPS=10
+export WARMUP_STEPS=20
 export TRAIN_LOG_EVERY=10
 export VAL_LOSS_EVERY=200
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
 export EXPORT_BEST_CHECKPOINT=1
 export SEQ_LEN_CURRICULUM=0
-export RECURRENCE_CURRICULUM=1
+export RECURRENCE_CURRICULUM=0
 
 # =============================================================================
 # Data determinism
