@@ -54,10 +54,10 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 65k tokens/step — safe for 24GB RTX 3090 (grad_accum=1)
+# Batch: 100k tokens/step — push VRAM to edge for quality (grad_accum=1)
 # =============================================================================
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-65536}"
-export TRAIN_BATCH_TOKENS=65536
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-102400}"
+export TRAIN_BATCH_TOKENS=102400
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
@@ -72,7 +72,7 @@ export CONTROL_LR=0.03
 export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
-export MUON_BACKEND_STEPS=8
+export MUON_BACKEND_STEPS=5
 export MUON_MOMENTUM=0.95
 
 # =============================================================================
