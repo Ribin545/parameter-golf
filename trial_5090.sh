@@ -72,7 +72,7 @@ export CONTROL_LR=0.03
 export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
-export MUON_BACKEND_STEPS=5
+export MUON_BACKEND_STEPS=8
 export MUON_MOMENTUM=0.95
 
 # =============================================================================
