@@ -54,11 +54,11 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 300k tokens/step — true micro-batch, no grad accum
+# Batch: 200k tokens/step — true micro-batch, no grad accum (300k OOM'd)
 # =============================================================================
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-307200}"
-export TRAIN_BATCH_TOKENS=307200
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-204800}"
+export TRAIN_BATCH_TOKENS=204800
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
