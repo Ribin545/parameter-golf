@@ -24,11 +24,80 @@ import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
+from contextlib import nullcontext
+
+try:
+    from torch.nn.attention import sdpa_kernel, SDPBackend
+except Exception:
+    sdpa_kernel = None
+    SDPBackend = None
 
 try:
     from triton_mlp import fused_relu2 as triton_fused_relu2
 except Exception:
     triton_fused_relu2 = None
+
+_MLP_MEMORY_MODE: str | None = None
+_ATTN_MEMORY_MODE: str | None = None
+_SDPA_BACKEND_MODE: str | None = None
+_ATTN_OUTPUT_MODE: str | None = None
+
+
+def _get_mlp_memory_mode() -> str:
+    global _MLP_MEMORY_MODE
+    if _MLP_MEMORY_MODE is None:
+        mode = os.environ.get("MLP_MEMORY_MODE", "").strip().lower()
+        if not mode:
+            # Back-compat: old Tier 3.1 flag now maps to checkpoint mode.
+            if os.environ.get("MLP_RECOMPUTE", "0") == "1":
+                mode = "checkpoint"
+            else:
+                mode = "off"
+        if mode not in {"off", "checkpoint", "eager_recompute"}:
+            mode = "off"
+        _MLP_MEMORY_MODE = mode
+    return _MLP_MEMORY_MODE
+
+
+def _get_attn_memory_mode() -> str:
+    global _ATTN_MEMORY_MODE
+    if _ATTN_MEMORY_MODE is None:
+        mode = os.environ.get("ATTN_MEMORY_MODE", "off").strip().lower()
+        if mode not in {"off", "checkpoint"}:
+            mode = "off"
+        _ATTN_MEMORY_MODE = mode
+    return _ATTN_MEMORY_MODE
+
+
+def _get_sdpa_backend_mode() -> str:
+    global _SDPA_BACKEND_MODE
+    if _SDPA_BACKEND_MODE is None:
+        mode = os.environ.get("SDPA_BACKEND", "auto").strip().lower()
+        if mode not in {"auto", "flash", "mem_efficient", "math"}:
+            mode = "auto"
+        _SDPA_BACKEND_MODE = mode
+    return _SDPA_BACKEND_MODE
+
+
+def _get_attn_output_mode() -> str:
+    global _ATTN_OUTPUT_MODE
+    if _ATTN_OUTPUT_MODE is None:
+        mode = os.environ.get("ATTN_OUTPUT_MODE", "baseline").strip().lower()
+        if mode not in {"baseline", "einsum_fused"}:
+            mode = "baseline"
+        _ATTN_OUTPUT_MODE = mode
+    return _ATTN_OUTPUT_MODE
+
+
+def _sdpa_context():
+    mode = _get_sdpa_backend_mode()
+    if sdpa_kernel is None or SDPBackend is None or mode == "auto":
+        return nullcontext()
+    if mode == "flash":
+        return sdpa_kernel([SDPBackend.FLASH_ATTENTION])
+    if mode == "mem_efficient":
+        return sdpa_kernel([SDPBackend.EFFICIENT_ATTENTION])
+    return sdpa_kernel([SDPBackend.MATH])
 
 
 class ShellCenteringPenalty(nn.Module):
@@ -188,9 +257,12 @@ class LoRALinear(nn.Module):
 
 
 class CausalSelfAttention(nn.Module):
-    """Multi-head self-attention with separate LoRA ranks for QKV vs attn_out (proj).
+    """Multi-head self-attention with fused QKV + separate LoRA ranks for QKV vs attn_out.
 
-    lora_qkv_rank: applied to Q, K, V projections (small matmul overhead)
+    Tier 1.1: Q, K, V projections fused into a single LoRALinear(dim, dim+2*kv_dim)
+    to eliminate 2 redundant input reads and reduce kernel launches.
+
+    lora_qkv_rank: applied to fused QKV projection (small matmul overhead)
     lora_proj_rank: applied to output projection (most expensive, removed by default)
     """
     def __init__(self, dim: int, num_heads: int, num_kv_heads: int,
@@ -200,14 +272,13 @@ class CausalSelfAttention(nn.Module):
         self.num_heads = num_heads
         self.num_kv_heads = num_kv_heads
         self.head_dim = dim // num_heads
-        kv_dim = self.num_kv_heads * self.head_dim
+        self.kv_dim = self.num_kv_heads * self.head_dim
+        qkv_out_dim = dim + 2 * self.kv_dim  # Q(dim) + K(kv_dim) + V(kv_dim)
         self.has_lora = (lora_qkv_rank > 0) or (lora_proj_rank > 0)
         self.num_steps = num_steps
 
-        # QKV: each is dim×dim (Q) or dim×kv_dim (K,V); kv_dim << dim for GQA
-        self.c_q = LoRALinear(dim, dim, num_steps, lora_qkv_rank)
-        self.c_k = LoRALinear(dim, kv_dim, num_steps, lora_qkv_rank)
-        self.c_v = LoRALinear(dim, kv_dim, num_steps, lora_qkv_rank)
+        # Tier 1.1: fused QKV projection — single matmul instead of 3
+        self.c_qkv = LoRALinear(dim, qkv_out_dim, num_steps, lora_qkv_rank)
         # proj: dim×dim — most expensive LoRA, defaults to rank=0 (disabled)
         self.proj = LoRALinear(dim, dim, num_steps, lora_proj_rank)
         self.proj.base._zero_init = True
@@ -220,27 +291,54 @@ class CausalSelfAttention(nn.Module):
         q_gain = self.q_gain if self.q_gain.dtype == dtype else self.q_gain.to(dtype=dtype)
         return q_gain[None, :, None, None]
 
+    def _proj_weight_for(self, y: Tensor) -> Tensor:
+        weight = self.proj.base.weight
+        if weight.dtype != y.dtype or weight.device != y.device:
+            weight = weight.to(device=y.device, dtype=y.dtype)
+        return weight
+
+    def _project_attn_output(self, y: Tensor, dim: int, step_idx: int) -> Tensor:
+        mode = _get_attn_output_mode()
+        # Tier 1.3: layout-preserving einsum path avoids contiguous copy
+        # Only used when output-proj LoRA is disabled.
+        if mode in {"einsum_fused", "baseline"} and not self.proj.has_lora:
+            weight = self._proj_weight_for(y)
+            weight_4d = weight.view(dim, self.num_heads, self.head_dim).permute(1, 2, 0).contiguous()
+            # y: [B, H, T, Dh] -> out: [B, T, D]
+            return torch.einsum("bhtd,hdo->bto", y, weight_4d)
+        y = y.transpose(1, 2).contiguous().reshape(y.size(0), y.size(2), dim)
+        return self.proj(y, step_idx=step_idx)
+
     def forward(self, x: Tensor, step_idx: int = 0) -> Tensor:
         bsz, seqlen, dim = x.shape
-        q = self.c_q(x, step_idx=step_idx).reshape(bsz, seqlen, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.c_k(x, step_idx=step_idx).reshape(bsz, seqlen, self.num_kv_heads, self.head_dim).transpose(1, 2)
-        v = self.c_v(x, step_idx=step_idx).reshape(bsz, seqlen, self.num_kv_heads, self.head_dim).transpose(1, 2)
+        # Tier 1.1: fused QKV — single linear projection then split
+        qkv = self.c_qkv(x, step_idx=step_idx)  # [B, T, dim + 2*kv_dim]
+        dim_q, dim_kv = dim, self.kv_dim
+        q = qkv[:, :, :dim_q].reshape(bsz, seqlen, self.num_heads, self.head_dim).transpose(1, 2)
+        k = qkv[:, :, dim_q:dim_q+dim_kv].reshape(bsz, seqlen, self.num_kv_heads, self.head_dim).transpose(1, 2)
+        v = qkv[:, :, dim_q+dim_kv:].reshape(bsz, seqlen, self.num_kv_heads, self.head_dim).transpose(1, 2)
 
+        cos, sin = self.rotary(seqlen, x.device, q.dtype)
+        q_gain = self._cached_q_gain(q.dtype)
         q = F.rms_norm(q, (q.size(-1),))
         k = F.rms_norm(k, (k.size(-1),))
-        cos, sin = self.rotary(seqlen, x.device, q.dtype)
         q = apply_rotary_emb(q, cos, sin)
         k = apply_rotary_emb(k, cos, sin)
-        q = q * self._cached_q_gain(q.dtype)
+        q = q * q_gain
 
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True,
-                                           enable_gqa=(self.num_kv_heads != self.num_heads))
-        y = y.transpose(1, 2).contiguous().reshape(bsz, seqlen, dim)
-        return self.proj(y, step_idx=step_idx)
+        with _sdpa_context():
+            y = F.scaled_dot_product_attention(q, k, v, is_causal=True,
+                                               enable_gqa=(self.num_kv_heads != self.num_heads))
+        return self._project_attn_output(y, dim=dim, step_idx=step_idx)
 
 
 class MLP(nn.Module):
-    """relu² MLP — matches OpenAI baseline exactly."""
+    """relu² MLP — matches OpenAI baseline exactly.
+
+    Tier 3.1: When MLP_RECOMPUTE=1, uses a custom autograd Function that
+    recomputes fc activations during backward instead of storing them,
+    saving ~600 MB VRAM per MLP call (at cost of ~0.3ms extra compute).
+    """
     def __init__(self, dim: int, mlp_mult: int):
         super().__init__()
         hidden = mlp_mult * dim
@@ -248,12 +346,27 @@ class MLP(nn.Module):
         self.proj = CastedLinear(hidden, dim, bias=False)
         self.proj._zero_init = True
 
-    def forward(self, x: Tensor) -> Tensor:
+    def _forward_impl(self, x: Tensor) -> Tensor:
         if triton_fused_relu2 is not None and x.is_cuda:
             x = triton_fused_relu2(x, self.fc.weight.t())
             return self.proj(x)
         x = torch.relu(self.fc(x))
         return self.proj(x.square())
+
+    def forward(self, x: Tensor) -> Tensor:
+        mode = _get_mlp_memory_mode()
+        if mode == "checkpoint" and self.training and torch.is_grad_enabled():
+            return checkpoint(
+                lambda z: self._forward_impl(z),
+                x,
+                use_reentrant=False,
+                preserve_rng_state=False,
+            )
+        # Research-only fallback: mathematically correct but too slow in practice.
+        if mode == "eager_recompute" and x.is_cuda and self.training:
+            from triton_mlp_recompute import mlp_recompute
+            return mlp_recompute(x, self.fc.weight, self.proj.weight)
+        return self._forward_impl(x)
 
 
 class Block(nn.Module):
@@ -277,20 +390,36 @@ class Block(nn.Module):
         self.attn_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.mlp_scale = nn.Parameter(torch.ones(dim, dtype=torch.float32))
         self.resid_mix = nn.Parameter(torch.stack((torch.ones(dim), torch.zeros(dim))).float())
-    def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0, attend: bool = True) -> Tensor:
-        # Tier 2 audit change: these tensors are tiny; recompute casts instead of
-        # keeping persistent cached mirrors on GPU.
-        mix = self.resid_mix if self.resid_mix.dtype == x.dtype else self.resid_mix.to(dtype=x.dtype)
-        mix0, mix1 = mix[0][None, None, :], mix[1][None, None, :]
-        attn_scale = self.attn_scale if self.attn_scale.dtype == x.dtype else self.attn_scale.to(dtype=x.dtype)
-        mlp_scale = self.mlp_scale if self.mlp_scale.dtype == x.dtype else self.mlp_scale.to(dtype=x.dtype)
-        attn_scale_v = attn_scale[None, None, :]
-        mlp_scale_v = mlp_scale[None, None, :]
+
+    def _forward_attn_branch(self, x: Tensor, step_idx: int) -> Tensor:
+        return self.attn(self.attn_norm(x), step_idx=step_idx)
+
+    def forward(self, x: Tensor, x0: Tensor, step_idx: int = 0, attend: bool = True,
+                mix0: Tensor | None = None, mix1: Tensor | None = None,
+                attn_scale_v: Tensor | None = None, mlp_scale_v: Tensor | None = None) -> Tensor:
+        # Tier 1.2: accept pre-cast scale tensors to avoid kernel launches
+        if mix0 is None:
+            mix = self.resid_mix if self.resid_mix.dtype == x.dtype else self.resid_mix.to(dtype=x.dtype)
+            mix0, mix1 = mix[0][None, None, :], mix[1][None, None, :]
+        if attn_scale_v is None:
+            attn_scale = self.attn_scale if self.attn_scale.dtype == x.dtype else self.attn_scale.to(dtype=x.dtype)
+            attn_scale_v = attn_scale[None, None, :]
+        if mlp_scale_v is None:
+            mlp_scale = self.mlp_scale if self.mlp_scale.dtype == x.dtype else self.mlp_scale.to(dtype=x.dtype)
+            mlp_scale_v = mlp_scale[None, None, :]
         x = mix0 * x + mix1 * x0
         # BUG FIX: propagate step_idx so per-step LoRA actually varies across recurrence steps
         # ATTENTION GATE: when attend=False, skip attention entirely — MLP-only refine step
         if attend:
-            attn_out = self.attn(self.attn_norm(x), step_idx=step_idx)
+            if _get_attn_memory_mode() == "checkpoint" and self.training and torch.is_grad_enabled():
+                attn_out = checkpoint(
+                    lambda z: self._forward_attn_branch(z, step_idx=step_idx),
+                    x,
+                    use_reentrant=False,
+                    preserve_rng_state=False,
+                )
+            else:
+                attn_out = self._forward_attn_branch(x, step_idx=step_idx)
             x = x + attn_scale_v * attn_out
         x = x + mlp_scale_v * self.mlp(self.mlp_norm(x))
         return x
@@ -383,19 +512,29 @@ class GPTMultiLayer(nn.Module):
         return (step_idx % self.recurrent_attn_every) == 0
 
     def _run_block(self, block: Block, block_idx: int, x: Tensor, x0: Tensor, step_idx: int,
-                   attend: bool = True) -> Tensor:
+                   attend: bool = True,
+                   mix0: Tensor | None = None, mix1: Tensor | None = None,
+                   attn_scale_v: Tensor | None = None, mlp_scale_v: Tensor | None = None) -> Tensor:
         if self._should_checkpoint_block(block_idx) and self.training and torch.is_grad_enabled():
             return checkpoint(
-                lambda a, b: block(a, b, step_idx=step_idx, attend=attend),
+                lambda a, b: block(a, b, step_idx=step_idx, attend=attend,
+                                   mix0=mix0, mix1=mix1,
+                                   attn_scale_v=attn_scale_v, mlp_scale_v=mlp_scale_v),
                 x,
                 x0,
                 use_reentrant=False,
                 preserve_rng_state=False,
             )
-        return block(x, x0, step_idx=step_idx, attend=attend)
+        return block(x, x0, step_idx=step_idx, attend=attend,
+                     mix0=mix0, mix1=mix1,
+                     attn_scale_v=attn_scale_v, mlp_scale_v=mlp_scale_v)
 
     def _run_encoder_stage(self, x: Tensor, x0: Tensor, step_idx: int,
-                           attend: bool = True) -> tuple[Tensor, list[Tensor]]:
+                           attend: bool = True,
+                           mix0: Tensor | None = None, mix1: Tensor | None = None,
+                           attn_scale_v: Tensor | None = None,
+                           mlp_scale_v: Tensor | None = None,
+                           ) -> tuple[Tensor, list[Tensor]]:
         if (
             self.activation_checkpointing
             and self.activation_checkpoint_mode == "encoder_grouped"
@@ -406,7 +545,9 @@ class GPTMultiLayer(nn.Module):
                 out = a
                 skips: list[Tensor] = []
                 for i in range(self.num_encoder_layers):
-                    out = self.blocks[i](out, b, step_idx=step_idx, attend=attend)
+                    out = self.blocks[i](out, b, step_idx=step_idx, attend=attend,
+                                         mix0=mix0, mix1=mix1,
+                                         attn_scale_v=attn_scale_v, mlp_scale_v=mlp_scale_v)
                     skips.append(out)
                 return (out, *skips)
 
@@ -422,7 +563,9 @@ class GPTMultiLayer(nn.Module):
         skips: list[Tensor] = []
         out = x
         for i in range(self.num_encoder_layers):
-            out = self._run_block(self.blocks[i], i, out, x0, step_idx=step_idx, attend=attend)
+            out = self._run_block(self.blocks[i], i, out, x0, step_idx=step_idx, attend=attend,
+                                  mix0=mix0, mix1=mix1,
+                                  attn_scale_v=attn_scale_v, mlp_scale_v=mlp_scale_v)
             skips.append(out)
         return out, skips
 

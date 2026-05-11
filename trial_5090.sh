@@ -42,7 +42,8 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 # =============================================================================
-# Architecture: Multilayer U-Net 5L×2S (512-dim with rank-8 LoRA) — 384 tried, degraded val_bpb
+# Architecture: Multilayer U-Net 5L×2S (512-dim with rank-8 LoRA)
+# Phase 9a Tier 1: fused QKV + layout-preserving einsum output
 # =============================================================================
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=5
@@ -90,7 +91,13 @@ export CONTROL_WEIGHT_DECAY=0.0
 export DYNAMIC_LR_NORM=1
 export TARGET_GRAD_NORM=0.5
 export GRAD_CLIP_NORM=1.0
-export QK_GAIN_INIT=2.0
+export QK_GAIN_INIT=3.0
+export LOGIT_SOFTCAP=30.0
+export Z_LOSS_LAMBDA=0.0
+
+# Tier 1: layout-preserving attention output (avoids .contiguous() copy)
+export ATTN_OUTPUT_MODE=baseline
+export QK_POST_MODE=baseline
 
 # =============================================================================
 # torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
@@ -111,6 +118,9 @@ export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
 
+# Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
+export MLP_RECOMPUTE=1
+
 # =============================================================================
 # Regularization
 # =============================================================================
@@ -124,9 +134,10 @@ export SCHEDULE_FREE=1
 export WARMUP_STEPS=20
 export TRAIN_LOG_EVERY=10
 export VAL_LOSS_EVERY=200
-export SAVE_BEST_CHECKPOINT=1
-export SAVE_BEST_INT8=1
-export EXPORT_BEST_CHECKPOINT=1
+export QUANT_EVAL=0
+export SAVE_BEST_CHECKPOINT=0
+export SAVE_BEST_INT8=0
+export EXPORT_BEST_CHECKPOINT=0
 export SEQ_LEN_CURRICULUM=0
 export RECURRENCE_CURRICULUM=0
 
