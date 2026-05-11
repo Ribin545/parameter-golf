@@ -55,11 +55,12 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 200k tokens/step — true micro-batch, no grad accum (300k OOM'd)
+# Batch: 150k tokens/step — true micro-batch, no grad accum
+# val_bpb: 1.5595 @S709 (10-min RTX 3090) vs 1.5708 @S986 for 100k
 # =============================================================================
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-204800}"
-export TRAIN_BATCH_TOKENS=204800
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-153600}"
+export TRAIN_BATCH_TOKENS=153600
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
@@ -74,9 +75,10 @@ export CONTROL_LR=0.03
 export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
-export MUON_BACKEND_STEPS=5
+export BETA1=0.9
+export MUON_BACKEND_STEPS=7
 export MUON_MOMENTUM=0.95
-export BETA2=0.92    # locked: -2.2% val_bpb (faster variance adaptation)
+export BETA2=0.95    # Phase 9b: cleaner adaptive scaling
 
 # =============================================================================
 # Weight decay
@@ -112,7 +114,7 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 export SHELL_CENTERING_ENABLED=1
-export SHELL_CENTERING_LAM=0.008
+export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
 export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
@@ -124,20 +126,20 @@ export MLP_RECOMPUTE=1
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.4
-export LABEL_SMOOTHING=0.15
+export DROPOUT_P=0.30       # Phase 9b: -0.10 from baseline, recover gradient signal
+export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 
 # =============================================================================
 # Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
 # =============================================================================
 export SCHEDULE_FREE=1
 export WARMUP_STEPS=20
-export TRAIN_LOG_EVERY=10
-export VAL_LOSS_EVERY=200
-export QUANT_EVAL=0
-export SAVE_BEST_CHECKPOINT=0
-export SAVE_BEST_INT8=0
-export EXPORT_BEST_CHECKPOINT=0
+export TRAIN_LOG_EVERY=50
+export VAL_LOSS_EVERY=100
+export QUANT_EVAL=1
+export SAVE_BEST_CHECKPOINT=1
+export SAVE_BEST_INT8=1
+export EXPORT_BEST_CHECKPOINT=1
 export SEQ_LEN_CURRICULUM=0
 export RECURRENCE_CURRICULUM=0
 
