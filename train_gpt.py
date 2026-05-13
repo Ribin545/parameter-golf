@@ -147,6 +147,8 @@ class Hyperparameters:
     bigram_hash_enabled = bool(int(os.environ.get("BIGRAM_HASH_ENABLED", "0")))
     bigram_hash_size = int(os.environ.get("BIGRAM_HASH_SIZE", 2048))
     bigram_hash_scale = float(os.environ.get("BIGRAM_HASH_SCALE", "0.05"))
+    bigram_logit_enabled = bool(int(os.environ.get("BIGRAM_LOGIT_ENABLED", "0")))
+    bigram_logit_scale_init = float(os.environ.get("BIGRAM_LOGIT_SCALE_INIT", "0.05"))
     level_signal_enabled = bool(int(os.environ.get("LEVEL_SIGNAL_ENABLED", "0")))
     level_signal_rank = int(os.environ.get("LEVEL_SIGNAL_RANK", "0")) or None
     shell_centering_enabled = bool(int(os.environ.get("SHELL_CENTERING_ENABLED", "0")))
@@ -354,7 +356,7 @@ def main() -> None:
         log0(f"[config] data: TRAIN_SEQ_LEN(eval)={args.train_seq_len} VAL_BATCH_SIZE={args.val_batch_size} VAL_LOSS_EVERY={args.val_loss_every}")
         log0(f"[config] model: dim={args.model_dim} heads={args.num_heads} kv_heads={args.num_kv_heads} mlp_mult={args.mlp_mult} steps={args.num_steps} lora_rank={args.lora_rank} lora_scope={args.lora_scope}")
         log0(f"[config] recurrent_speed: ATTN_EVERY={args.recurrent_attn_every} REFINE_MLP_RATIO={args.recurrent_refine_mlp_ratio} ATTEND_LAST={int(args.recurrent_attend_last)} DROPOUT_P={args.dropout_p} LABEL_SMOOTHING={args.label_smoothing}")
-        log0(f"[config] features: BIGRAM_HASH={int(args.bigram_hash_enabled)} BIGRAM_HASH_SIZE={args.bigram_hash_size} BIGRAM_HASH_SCALE={args.bigram_hash_scale} LEVEL_SIGNAL={int(args.level_signal_enabled)} LEVEL_SIGNAL_RANK={args.level_signal_rank or 0} SHELL_CENTERING={int(args.shell_centering_enabled)} SHELL_CENTERING_LAM={args.shell_centering_lam}")
+        log0(f"[config] features: BIGRAM_HASH={int(args.bigram_hash_enabled)} BIGRAM_HASH_SIZE={args.bigram_hash_size} BIGRAM_HASH_SCALE={args.bigram_hash_scale} BIGRAM_LOGIT={int(args.bigram_logit_enabled)} BIGRAM_LOGIT_SCALE_INIT={args.bigram_logit_scale_init} LEVEL_SIGNAL={int(args.level_signal_enabled)} LEVEL_SIGNAL_RANK={args.level_signal_rank or 0} SHELL_CENTERING={int(args.shell_centering_enabled)} SHELL_CENTERING_LAM={args.shell_centering_lam}")
         log0(f"[config] optim: MATRIX_LR={args.matrix_lr} MUON_BACKEND_STEPS={args.muon_backend_steps} MUON_MOMENTUM={args.muon_momentum} SCALAR_LR={args.scalar_lr}")
         log0(f"[config] optim_groups: LORA_LR={args.lora_lr} CONTROL_LR={args.control_lr} SCALAR_WD={args.scalar_weight_decay} LORA_WD={args.lora_weight_decay} CONTROL_WD={args.control_weight_decay}")
         log0(f"[config] clip: GRAD_CLIP_NORM={args.grad_clip_norm} DYNAMIC_LR_NORM={int(args.dynamic_lr_norm)} TARGET_GRAD_NORM={args.target_grad_norm}")
@@ -397,6 +399,8 @@ def main() -> None:
             shell_centering_lam=args.shell_centering_lam,
             label_smoothing=args.label_smoothing,
             z_loss_lambda=args.z_loss_lambda,
+            bigram_logit_enabled=args.bigram_logit_enabled,
+            bigram_logit_scale_init=args.bigram_logit_scale_init,
         ).to(device).bfloat16()
         # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
         # Use 'default' mode: enables Inductor kernel fusion without CUDA graph
