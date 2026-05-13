@@ -91,6 +91,27 @@ With `WARMUP_STEPS=40` (was 20) to compensate for higher initial LRs.
 + export CONTROL_LR=0.04
 ```
 
+## `trial_5090.sh` Config Status
+
+All 12 Phase 9c settings are confirmed present in `trial_5090.sh` (commit `cebde89`):
+
+| Setting | Value | Line |
+|---------|-------|------|
+| `MATRIX_LR` | 0.15 | 71 |
+| `SCALAR_LR` | 0.04 | 72 |
+| `LORA_LR` | 0.04 | 73 |
+| `CONTROL_LR` | 0.04 | 74 |
+| `MULTILAYER_ACTIVATION_CHECKPOINT` | 1 | 119 |
+| `MULTILAYER_ACTIVATION_CHECKPOINT_MODE` | encoder | 120 |
+| `MLP_RECOMPUTE` | 1 | 123 |
+| `MLP_MEMORY_MODE` | checkpoint | 126 |
+| `ATTN_MEMORY_MODE` | checkpoint | 127 |
+| `SDPA_BACKEND` | auto | 130 |
+| `TARGET_GRAD_NORM` | 0.8 | 133 |
+| `WARMUP_STEPS` | 40 | 145 |
+
+**Fix applied:** Removed duplicate `TARGET_GRAD_NORM=0.5` (was on line 94). Now only `TARGET_GRAD_NORM=0.8` remains.
+
 ## VRAM Logging Notes
 
 The `resv_gib` values (10.98 GiB) are CUDA allocator pool reservations, not actual usage. The **actual** allocated memory (`alloc_gib=0.14`) is tiny because PyTorch's allocator keeps a pool reserved for reuse. The **peak** allocation is what matters:
