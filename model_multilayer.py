@@ -439,8 +439,7 @@ class GPTMultiLayer(nn.Module):
                  shell_centering_lam: float = 0.008,
                  label_smoothing: float = 0.0,
                  z_loss_lambda: float = 0.0,
-                 bigram_logit_enabled: bool = False,
-                 bigram_logit_scale_init: float = 0.05):
+):
         super().__init__()
         self.tie_embeddings = tie_embeddings
         self.tied_embed_init_std = tied_embed_init_std
@@ -452,7 +451,6 @@ class GPTMultiLayer(nn.Module):
             ShellCenteringPenalty(model_dim, lam=shell_centering_lam)
             if self.shell_centering_enabled else None
         )
-        self.bigram_logit_enabled = bigram_logit_enabled
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
@@ -479,11 +477,6 @@ class GPTMultiLayer(nn.Module):
         self.lm_bias = nn.Parameter(torch.zeros(vocab_size, dtype=torch.float32))
         if self.lm_head is not None:
             self.lm_head._zero_init = True
-        
-        # Phase 10: static bigram logit bias — pre-computed from unigrams, no gradients
-        if self.bigram_logit_enabled:
-            self.register_buffer('bigram_logit_bias', torch.zeros(vocab_size, vocab_size, dtype=torch.float32))
-            self.bigram_logit_scale = float(bigram_logit_scale_init)
         
         self._init_weights()
 
@@ -618,15 +611,7 @@ class GPTMultiLayer(nn.Module):
         else:
             logits_proj = self.lm_head(x)
         logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
-        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
-        
-        # Phase 10: static bigram logit bias (no gradients)
-        if self.bigram_logit_enabled:
-            prev_ids = F.pad(input_ids[:, :-1], (1, 0), value=0)
-            bias = self.bigram_logit_bias[prev_ids.long()] * self.bigram_logit_scale
-            logits = logits + bias.to(dtype=logits.dtype)
-        
-        return logits
+        return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
         logits = self.forward_logits(input_ids)

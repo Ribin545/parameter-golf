@@ -92,6 +92,7 @@ export CONTROL_WEIGHT_DECAY=0.0
 # =============================================================================
 export DYNAMIC_LR_NORM=1
 export GRAD_CLIP_NORM=1.0
+export TARGET_GRAD_NORM=0.8
 export QK_GAIN_INIT=3.0
 export LOGIT_SOFTCAP=30.0
 export Z_LOSS_LAMBDA=0.0
@@ -113,11 +114,6 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 
-# Phase 10: bigram logit bias — DISABLED after A/B testing
-# All variants (learned scale=0.05, static scale=0.01) showed regression vs baseline
-# Best: Phase 9c baseline at val_bpb=1.5639
-# export BIGRAM_LOGIT_ENABLED=1
-# export BIGRAM_LOGIT_SCALE_INIT=0.05
 export SHELL_CENTERING_ENABLED=1
 export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
