@@ -480,10 +480,10 @@ class GPTMultiLayer(nn.Module):
         if self.lm_head is not None:
             self.lm_head._zero_init = True
         
-        # Phase 10: learned bigram logit bias — cheap entropy reducer
+        # Phase 10: static bigram logit bias — pre-computed from unigrams, no gradients
         if self.bigram_logit_enabled:
-            self.bigram_logit_bias = nn.Parameter(torch.zeros(vocab_size, vocab_size, dtype=torch.float32))
-            self.bigram_logit_scale = nn.Parameter(torch.tensor(bigram_logit_scale_init, dtype=torch.float32))
+            self.register_buffer('bigram_logit_bias', torch.zeros(vocab_size, vocab_size, dtype=torch.float32))
+            self.bigram_logit_scale = float(bigram_logit_scale_init)
         
         self._init_weights()
 
@@ -620,11 +620,10 @@ class GPTMultiLayer(nn.Module):
         logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
         logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
         
-        # Phase 10: learned bigram logit bias
+        # Phase 10: static bigram logit bias (no gradients)
         if self.bigram_logit_enabled:
             prev_ids = F.pad(input_ids[:, :-1], (1, 0), value=0)
-            # Use .long() for indexing, .to(dtype) for arithmetic
-            bias = self.bigram_logit_bias[prev_ids.long()] * torch.sigmoid(self.bigram_logit_scale)
+            bias = self.bigram_logit_bias[prev_ids.long()] * self.bigram_logit_scale
             logits = logits + bias.to(dtype=logits.dtype)
         
         return logits

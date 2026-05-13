@@ -113,7 +113,9 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 
-# Phase 10: learned bigram logit bias — DISABLED (A/B test showed -0.0245 val_bpb regression)
+# Phase 10: bigram logit bias — DISABLED after A/B testing
+# All variants (learned scale=0.05, static scale=0.01) showed regression vs baseline
+# Best: Phase 9c baseline at val_bpb=1.5639
 # export BIGRAM_LOGIT_ENABLED=1
 # export BIGRAM_LOGIT_SCALE_INIT=0.05
 export SHELL_CENTERING_ENABLED=1
