@@ -91,7 +91,6 @@ export CONTROL_WEIGHT_DECAY=0.0
 # Gradients
 # =============================================================================
 export DYNAMIC_LR_NORM=1
-export TARGET_GRAD_NORM=0.5
 export GRAD_CLIP_NORM=1.0
 export QK_GAIN_INIT=3.0
 export LOGIT_SOFTCAP=30.0
