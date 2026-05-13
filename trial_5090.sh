@@ -64,21 +64,21 @@ export TRAIN_BATCH_TOKENS=153600
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: Muon + AdamW — conservative LRs + tier 1 improvements
+# Optimizer: Muon + AdamW — Phase 9c: higher LRs for faster convergence
 # =============================================================================
 export OPTIM_MODE=muon_adam
 export MATRIX_OPTIM=muon
-export MATRIX_LR=0.12
-export SCALAR_LR=0.03
-export LORA_LR=0.03
-export CONTROL_LR=0.03
+export MATRIX_LR=0.15
+export SCALAR_LR=0.04
+export LORA_LR=0.04
+export CONTROL_LR=0.04
 export EMBED_LR=0.3
 export HEAD_LR=0.008
 export TIED_EMBED_LR=0.03
 export BETA1=0.9
 export MUON_BACKEND_STEPS=7
 export MUON_MOMENTUM=0.95
-export BETA2=0.95    # Phase 9b: cleaner adaptive scaling
+export BETA2=0.95
 
 # =============================================================================
 # Weight decay
@@ -123,6 +123,16 @@ export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
 # Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
 export MLP_RECOMPUTE=1
 
+# Phase 9c: checkpointing for MLP + attention to reduce VRAM
+export MLP_MEMORY_MODE=checkpoint
+export ATTN_MEMORY_MODE=checkpoint
+
+# Phase 9c: Flash Attention for speed
+export SDPA_BACKEND=auto
+
+# Phase 9c: gradient norm target
+export TARGET_GRAD_NORM=0.8
+
 # =============================================================================
 # Regularization
 # =============================================================================
@@ -133,7 +143,7 @@ export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 # Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
 # =============================================================================
 export SCHEDULE_FREE=1
-export WARMUP_STEPS=20
+export WARMUP_STEPS=40
 export TRAIN_LOG_EVERY=50
 export VAL_LOSS_EVERY=100
 export QUANT_EVAL=1
