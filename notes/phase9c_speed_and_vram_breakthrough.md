@@ -100,8 +100,34 @@ The `resv_gib` values (10.98 GiB) are CUDA allocator pool reservations, not actu
 
 This is normal PyTorch behavior, not a bug.
 
+## Git Push Troubleshooting
+
+**Problem:** WSL `git push` to HTTPS origin hangs indefinitely — no error, no output, process stuck.
+
+**Root cause:** WSL Git with `https://github.com` URL was silently waiting for credential input (likely credential manager not configured or prompting via GUI that doesn't work in WSL terminal).
+
+**What was tried:**
+- `GIT_TERMINAL_PROMPT=0` — still hangs
+- `GIT_SSH_COMMAND` with SSH URL — `Host key verification failed`
+- Multiple background/nohup approaches — all hang
+
+**Solution:** Use **Windows `git.exe`** which has proper Windows credential manager integration:
+
+```bash
+# Windows git location
+/mnt/c/Program\ Files/Git/cmd/git.exe --version  # v2.53.0.windows.1
+
+# Push with Windows git (uses Windows credential manager)
+/mnt/c/Program\ Files/Git/cmd/git.exe push origin master
+```
+
+This works because Windows git.exe talks to the Windows Credential Manager which already has the GitHub token stored from VS Code / GitHub Desktop setup.
+
+**Note for future:** On this Windows+WSL setup, always use Windows `git.exe` for push operations to GitHub HTTPS remotes. WSL git works fine for local operations but fails silently on HTTPS push.
+
 ## Action Items
 
 1. ✅ `trial_5090.sh` updated with Phase 9c config
 2. ✅ Notes documented
-3. 🔄 Next: Test if 160k or 170k batch is possible with the saved VRAM headroom
+3. ✅ Git push issue documented
+4. 🔄 Next: Test if 160k or 170k batch is possible with the saved VRAM headroom
