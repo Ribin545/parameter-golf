@@ -113,9 +113,9 @@ export BIGRAM_HASH_ENABLED=1
 export BIGRAM_HASH_SIZE=4096
 export BIGRAM_HASH_SCALE=0.05
 
-# Phase 10: learned bigram logit bias — entropy reducer
-export BIGRAM_LOGIT_ENABLED=1
-export BIGRAM_LOGIT_SCALE_INIT=0.05
+# Phase 10: learned bigram logit bias — DISABLED (A/B test showed -0.0245 val_bpb regression)
+# export BIGRAM_LOGIT_ENABLED=1
+# export BIGRAM_LOGIT_SCALE_INIT=0.05
 export SHELL_CENTERING_ENABLED=1
 export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
