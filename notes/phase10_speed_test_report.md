@@ -198,37 +198,53 @@ Log file: `logs/9bf5eff8-ddea-42cd-8950-3cfb4673d68e.txt` — confirmed OOM
 
 ## Verified Training Results
 
-### `no_mlp_checkpoint` Policy (100-step run)
+### `no_mlp_checkpoint` Policy (10-minute / 801-step run)
 
 ```
 Config: no_mlp_checkpoint + default compile + cudagraphs=False
-
-Step times:
-  step:0  dt:18025ms  (compile warmup)
-  step:1  dt:5273ms   (compile warmup)
-  step:2  dt:636ms    ✅
-  step:3  dt:636ms    ✅
-  step:4  dt:639ms    ✅
-  step:5  dt:639ms    ✅
-  step:6  dt:638ms    ✅
-  step:7  dt:637ms    ✅
-  step:8  dt:636ms    ✅
-  step:9  dt:646ms    ✅
-  step:25 dt:635ms    ✅
-  step:50 dt:639ms    ✅
-  step:75 dt:643ms    ✅
-
-VRAM:
-  vram_peak_alloc_gib=7.75  (very safe)
-
-Validation:
-  step:50  val_bpb: 3.3276  (warmup eval)
-  step:100 val_bpb: 3.2775  (final eval)
-  Identical to baseline ✅
-
-Parameter count: 12,455,976 total, 122,880 LoRA
-Identical to baseline ✅
+Duration: ~9 minutes (539 seconds)
+Steps: 801
 ```
+
+**Step times (stable):**
+```
+step:150 dt:645ms    step:400 dt:641ms    step:650 dt:643ms
+step:200 dt:642ms    step:450 dt:646ms    step:700 dt:647ms
+step:250 dt:645ms    step:500 dt:652ms    step:750 dt:650ms
+step:300 dt:645ms    step:550 dt:649ms    step:800 dt:657ms
+Average: ~645ms
+```
+
+**VRAM (stable):**
+```
+vram_peak_alloc_gib=7.77-7.78  (consistent across all evals)
+```
+
+**val_bpb progression:**
+```
+step:200  val_bpb: 2.1195
+step:300  val_bpb: 1.8698   ← new best
+step:400  val_bpb: 1.7424   ← new best
+step:500  val_bpb: 1.6865   ← new best
+step:600  val_bpb: 1.6652   ← new best
+step:700  val_bpb: 1.6491   ← new best
+step:800  val_bpb: 1.6218   ← new best
+step:801  val_bpb: 1.5536   ← FINAL BEST
+```
+
+**Quantization check:**
+```
+fp_val_loss=2.6329  fp_val_bpb=1.5536
+int8_val_loss=2.6340 int8_val_bpb=1.5543
+```
+INT8 degradation: only 0.0006 bpb — negligible.
+
+**Checkpoints saved:**
+- `best_model.pt` (23.76 MiB)
+- `best_model.int8.ptz` (10.38 MiB)
+
+**Parameter count: 12,455,976 total, 122,880 LoRA**
+Identical to baseline ✅
 
 ---
 

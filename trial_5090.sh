@@ -102,9 +102,10 @@ export ATTN_OUTPUT_MODE=baseline
 export QK_POST_MODE=baseline
 
 # =============================================================================
-# torch.compile — DISABLED (CUDA graph cache sharing is unsafe under grad acc)
+# torch.compile — Phase 10: default mode with cudagraphs=False (safe with ckpt)
 # =============================================================================
-export DISABLE_COMPILE=1
+export DISABLE_COMPILE=0
+export TORCH_COMPILE_MODE=default
 
 # =============================================================================
 # Features (quality knobs — cheap enough to keep)
@@ -119,14 +120,15 @@ export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
 export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
-export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=no_mlp_checkpoint
 
 # Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
 export MLP_RECOMPUTE=1
 
-# Phase 9c: checkpointing for MLP + attention to reduce VRAM
+# Phase 10: selective checkpointing — no_mlp_checkpoint skips second half of decoder
+# MLP still uses custom autograd (Triton fused), block-level ckpt handles attention
 export MLP_MEMORY_MODE=checkpoint
-export ATTN_MEMORY_MODE=checkpoint
+export ATTN_MEMORY_MODE=off
 
 # Phase 9c: Flash Attention for speed
 export SDPA_BACKEND=auto
