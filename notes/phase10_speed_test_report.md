@@ -6,38 +6,44 @@ Exhaustive A/B testing of every optimization path to get step time under 600ms.
 
 ---
 
-## 🏆 FINAL WINNING CONFIG
+## 🏆 ULTIMATE WINNING CONFIG: Static Mini-Depth
 
 ```bash
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
 export DISABLE_COMPILE=0
 export TORCH_COMPILE_MODE=default
+export MINI_DEPTH_STATIC=1
+export MINI_DEPTH_REFINE_BLOCKS=3
 ```
 
 **Results:**
-- **Step time: ~571ms** (down from ~743ms) = **23% faster**
-- **VRAM: 10.06 GiB** (still safe on 24GB with 14 GiB headroom)
-- **Stable across 900+ steps** with no recompilation spikes
-- **val_bpb: 1.5390** (identical to baseline ~1.5639 — actually slightly better!)
-- **INT8 quantization: 0.0002 bpb degradation** (negligible)
+- **Step time: ~541ms** (down from ~743ms) = **27% faster**
+- **VRAM: 9.62 GiB** (safe on 24GB with 14+ GiB headroom)
+- **Stable across 950+ steps** with no recompilation spikes
+- **val_bpb: 1.5298** (better than baseline ~1.5390!)
+- **INT8 quantization: 0.0014 bpb degradation** (negligible)
+- **951 steps in 10 minutes** vs ~810 before = **17% more training**
 
 ---
 
-## How It Works
+## How Static Mini-Depth Works
 
-The `encoder_only` policy checkpoints **only encoder blocks (0, 1)** and skips **ALL decoder blocks (2, 3, 4)**:
+**Step 0**: Full model (all 5 blocks) with attention + MLP
+**Step 1**: Only last K blocks (3 blocks: 2,3,4) with MLP-only refine (no attention)
 
 ```python
-if mode == "encoder_only":
-    return block_idx < self.num_encoder_layers
+if is_trimmed_step:
+    first_block = self.num_layers - refine_blocks  # 5-3 = 2
+    for block_idx in range(first_block, self.num_layers):
+        x = run_block(blocks[block_idx], x, x0, attend=False)  # MLP only
 ```
 
-For the 5-layer model (2 encoder + 3 decoder):
-- **Blocks 0, 1** (encoder): ✅ checkpointed
-- **Blocks 2, 3, 4** (decoder): ❌ NOT checkpointed
-
-The decoder is the skip-connection-heavy path where memory pressure is highest. By not checkpointing it, we save the most recomputation overhead while keeping encoder checkpointing for safety.
+This is a **static hard schedule** — no entropy, no dynamic shapes, no dead compute:
+- Fixed K=3 blocks in step 1
+- No branching, no masking, no blending
+- `torch.compile` sees static shapes, no recompilation
+- Pure compute reduction: step 1 runs 3 blocks instead of 5
 
 ---
 

@@ -122,6 +122,11 @@ export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
 
+# Static mini-depth: step 1 only runs last K blocks (K=3 is the sweet spot)
+# ~541ms step time (15% faster), val_bpb 1.5298 (better than 1.5390)
+export MINI_DEPTH_STATIC=1
+export MINI_DEPTH_REFINE_BLOCKS=3
+
 # Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
 export MLP_RECOMPUTE=1
 
