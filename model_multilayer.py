@@ -517,6 +517,12 @@ class GPTMultiLayer(nn.Module):
                 rel_idx = block_idx - self.num_encoder_layers
                 # Only checkpoint first half of decoder
                 return rel_idx < (self.num_decoder_layers // 2)
+        if mode == "encoder_only":
+            # Only checkpoint encoder blocks — skip ALL decoder blocks
+            return block_idx < self.num_encoder_layers
+        if mode == "minimal":
+            # Only checkpoint the first block (cheapest, most memory savings)
+            return block_idx == 0
         if mode == "decoder":
             return block_idx >= self.num_encoder_layers
         if mode == "encoder":

@@ -120,7 +120,7 @@ export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
 export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
-export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=no_mlp_checkpoint
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
 
 # Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
 export MLP_RECOMPUTE=1
