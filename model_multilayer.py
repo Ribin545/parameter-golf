@@ -451,12 +451,11 @@ class GPTMultiLayer(nn.Module):
             ShellCenteringPenalty(model_dim, lam=shell_centering_lam)
             if self.shell_centering_enabled else None
         )
-        # Mini-depth recurrence: entropy-gated refine
-        self.mini_depth_enabled = os.environ.get("MINI_DEPTH_ENABLED", "0") == "1"
-        self.mini_depth_threshold = float(os.environ.get("MINI_DEPTH_ENTROPY_THRESHOLD", "1.5"))
-        self.mini_depth_percentile = float(os.environ.get("MINI_DEPTH_ENTROPY_PERCENTILE", "0.0"))
-        if self.mini_depth_percentile > 0:
-            self.mini_depth_threshold = -1.0  # use percentile instead
+        # Static mini-depth: in step >=1, only run last N blocks (no entropy, fixed schedule)
+        self.mini_depth_static = os.environ.get("MINI_DEPTH_STATIC", "0") == "1"
+        self.mini_depth_refine_blocks = int(os.environ.get("MINI_DEPTH_REFINE_BLOCKS", str(num_layers)))
+        if self.mini_depth_refine_blocks > num_layers or self.mini_depth_refine_blocks < 1:
+            self.mini_depth_refine_blocks = num_layers
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
@@ -617,29 +616,11 @@ class GPTMultiLayer(nn.Module):
         logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
         return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
-    def _compute_entropy_gate(self, x: Tensor) -> Tensor:
-        """Compute per-token entropy gate [B, T, 1]. 
-        gate=1.0 → run full refine, gate=0.0 → skip refine."""
-        with torch.no_grad():
-            preview_logits = self._compute_logits(x)  # [B, T, vocab]
-            probs = F.softmax(preview_logits.float(), dim=-1)
-            entropy = -(probs * (probs + 1e-10).log()).sum(dim=-1)  # [B, T]
-            
-            if self.mini_depth_percentile > 0:
-                # Percentile-based: refine top-K% highest-entropy tokens
-                k = max(1, int(self.mini_depth_percentile * entropy.numel()))
-                kth_val = torch.kthvalue(entropy.view(-1), entropy.numel() - k + 1).values
-                gate = (entropy > kth_val).float()
-            else:
-                # Fixed threshold
-                gate = (entropy > self.mini_depth_threshold).float()
-            return gate.unsqueeze(-1).to(x.dtype)
-
     def forward_logits(self, input_ids: Tensor, **kwargs) -> Tensor:
         """Return logits in shape [B, T, vocab].
 
-        MINI-DEPTH: When enabled, runs step 1 (MLP refine) only on high-entropy
-        (low-confidence) tokens. Easy tokens pass through unchanged.
+        STATIC MINI-DEPTH: When enabled, step 1 only runs the last K blocks
+        (fixed schedule, no entropy, no dynamic shapes). Step 0 always runs full.
 
         This matches the interface expected by eval_utils.eval_val(), which applies
         cross-entropy over logits.permute(0, 2, 1).
@@ -659,32 +640,31 @@ class GPTMultiLayer(nn.Module):
                 skip_w = skip_w.to(dtype=x.dtype)
             _skip_cached.append(skip_w[None, None, :])
 
-        # Entropy gate for mini-depth (computed after step 0, applied in step 1)
-        gate = None
-        x_after_step0 = None  # Save step 0 output for blending
+        # STATIC MINI-DEPTH: in step >=1, only run last K blocks
+        refine_blocks = self.mini_depth_refine_blocks if self.mini_depth_static else self.num_layers
+        refine_blocks = max(1, min(refine_blocks, self.num_layers))
 
-        # ATTENTION GATE: step 0 = full attn+MLP, step 1 = MLP-only refine
+        # Recurrence: step 0 always full, later steps may be trimmed
         for step in range(self.num_steps):
             attend = self._step_uses_attention(step)
-            # Encoder: store skips
-            x, skips = self._run_encoder_stage(x, x0, step_idx=step, attend=attend)
+            is_trimmed_step = self.mini_depth_static and step > 0 and refine_blocks < self.num_layers
 
-            # Decoder: consume skips in reverse order
-            for i in range(self.num_decoder_layers):
-                if skips and i < self.num_skip_weights:
-                    x = x + _skip_cached[i] * skips.pop()
-                block_idx = self.num_encoder_layers + i
-                x = self._run_block(self.blocks[block_idx], block_idx, x, x0, step_idx=step, attend=attend)
-
-            # MINI-DEPTH: After step 0, save output and compute entropy gate for step 1
-            if self.mini_depth_enabled and step == 0 and self.num_steps > 1:
-                x_after_step0 = x  # Save step 0 output for blending (keeps autograd graph)
-                gate = self._compute_entropy_gate(x)
-
-            # MINI-DEPTH: After step 1 (MLP refine), blend with step 0 output
-            # gate=1.0 → keep refined output, gate=0.0 → revert to step 0 output
-            if self.mini_depth_enabled and step == 1 and gate is not None and x_after_step0 is not None:
-                x = gate * x + (1.0 - gate) * x_after_step0
+            if is_trimmed_step:
+                # STATIC MINI-DEPTH: step >=1, only run last K blocks
+                # NO skip connections — blocks run with residual only
+                first_block = self.num_layers - refine_blocks
+                for block_idx in range(first_block, self.num_layers):
+                    x = self._run_block(self.blocks[block_idx], block_idx, x, x0,
+                                        step_idx=step, attend=attend)
+            else:
+                # Full pass: encoder + decoder with U-Net skip connections
+                x, skips = self._run_encoder_stage(x, x0, step_idx=step, attend=attend)
+                for i in range(self.num_decoder_layers):
+                    if skips and i < self.num_skip_weights:
+                        x = x + _skip_cached[i] * skips.pop()
+                    block_idx = self.num_encoder_layers + i
+                    x = self._run_block(self.blocks[block_idx], block_idx, x, x0,
+                                        step_idx=step, attend=attend)
 
         return self._compute_logits(x)
 
