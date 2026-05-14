@@ -451,6 +451,12 @@ class GPTMultiLayer(nn.Module):
             ShellCenteringPenalty(model_dim, lam=shell_centering_lam)
             if self.shell_centering_enabled else None
         )
+        # Mini-depth recurrence: entropy-gated refine
+        self.mini_depth_enabled = os.environ.get("MINI_DEPTH_ENABLED", "0") == "1"
+        self.mini_depth_threshold = float(os.environ.get("MINI_DEPTH_ENTROPY_THRESHOLD", "1.5"))
+        self.mini_depth_percentile = float(os.environ.get("MINI_DEPTH_ENTROPY_PERCENTILE", "0.0"))
+        if self.mini_depth_percentile > 0:
+            self.mini_depth_threshold = -1.0  # use percentile instead
         self.num_layers = num_layers
         self.num_steps = num_steps
         self.lora_rank = lora_rank
@@ -601,8 +607,39 @@ class GPTMultiLayer(nn.Module):
             skips.append(out)
         return out, skips
 
+    def _compute_logits(self, x: Tensor) -> Tensor:
+        """Helper: compute logits from hidden states."""
+        x = self.final_norm(x)
+        if self.tie_embeddings:
+            logits_proj = F.linear(x, self.tok_emb.weight)
+        else:
+            logits_proj = self.lm_head(x)
+        logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
+        return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+
+    def _compute_entropy_gate(self, x: Tensor) -> Tensor:
+        """Compute per-token entropy gate [B, T, 1]. 
+        gate=1.0 → run full refine, gate=0.0 → skip refine."""
+        with torch.no_grad():
+            preview_logits = self._compute_logits(x)  # [B, T, vocab]
+            probs = F.softmax(preview_logits.float(), dim=-1)
+            entropy = -(probs * (probs + 1e-10).log()).sum(dim=-1)  # [B, T]
+            
+            if self.mini_depth_percentile > 0:
+                # Percentile-based: refine top-K% highest-entropy tokens
+                k = max(1, int(self.mini_depth_percentile * entropy.numel()))
+                kth_val = torch.kthvalue(entropy.view(-1), entropy.numel() - k + 1).values
+                gate = (entropy > kth_val).float()
+            else:
+                # Fixed threshold
+                gate = (entropy > self.mini_depth_threshold).float()
+            return gate.unsqueeze(-1).to(x.dtype)
+
     def forward_logits(self, input_ids: Tensor, **kwargs) -> Tensor:
         """Return logits in shape [B, T, vocab].
+
+        MINI-DEPTH: When enabled, runs step 1 (MLP refine) only on high-entropy
+        (low-confidence) tokens. Easy tokens pass through unchanged.
 
         This matches the interface expected by eval_utils.eval_val(), which applies
         cross-entropy over logits.permute(0, 2, 1).
@@ -622,6 +659,10 @@ class GPTMultiLayer(nn.Module):
                 skip_w = skip_w.to(dtype=x.dtype)
             _skip_cached.append(skip_w[None, None, :])
 
+        # Entropy gate for mini-depth (computed after step 0, applied in step 1)
+        gate = None
+        x_after_step0 = None  # Save step 0 output for blending
+
         # ATTENTION GATE: step 0 = full attn+MLP, step 1 = MLP-only refine
         for step in range(self.num_steps):
             attend = self._step_uses_attention(step)
@@ -635,13 +676,17 @@ class GPTMultiLayer(nn.Module):
                 block_idx = self.num_encoder_layers + i
                 x = self._run_block(self.blocks[block_idx], block_idx, x, x0, step_idx=step, attend=attend)
 
-        x = self.final_norm(x)
-        if self.tie_embeddings:
-            logits_proj = F.linear(x, self.tok_emb.weight)
-        else:
-            logits_proj = self.lm_head(x)
-        logits_proj = logits_proj + self.lm_bias.to(dtype=logits_proj.dtype)
-        return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+            # MINI-DEPTH: After step 0, save output and compute entropy gate for step 1
+            if self.mini_depth_enabled and step == 0 and self.num_steps > 1:
+                x_after_step0 = x  # Save step 0 output for blending (keeps autograd graph)
+                gate = self._compute_entropy_gate(x)
+
+            # MINI-DEPTH: After step 1 (MLP refine), blend with step 0 output
+            # gate=1.0 → keep refined output, gate=0.0 → revert to step 0 output
+            if self.mini_depth_enabled and step == 1 and gate is not None and x_after_step0 is not None:
+                x = gate * x + (1.0 - gate) * x_after_step0
+
+        return self._compute_logits(x)
 
     def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:
         logits = self.forward_logits(input_ids)
