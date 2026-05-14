@@ -487,12 +487,36 @@ class GPTMultiLayer(nn.Module):
             if isinstance(module, nn.Linear) and getattr(module, "_zero_init", False):
                 nn.init.zeros_(module.weight)
 
-    def _should_checkpoint_block(self, block_idx: int) -> bool:
+    def _should_checkpoint_block(self, block_idx: int, attend: bool = True, step_idx: int = 0) -> bool:
         if not self.activation_checkpointing:
             return False
         mode = self.activation_checkpoint_mode
         if mode == "full":
             return True
+        if mode == "attention_only":
+            # Only checkpoint when attention is used (skip MLP-only refine steps)
+            return attend
+        if mode == "late_attention":
+            # Only checkpoint last N blocks of encoder and decoder
+            late_n = int(os.environ.get("CHECKPOINT_LATE_N", "2"))
+            is_encoder = block_idx < self.num_encoder_layers
+            if is_encoder:
+                return block_idx >= self.num_encoder_layers - late_n
+            else:
+                rel_idx = block_idx - self.num_encoder_layers
+                return rel_idx >= self.num_decoder_layers - late_n
+        if mode == "no_refine_checkpoint":
+            # Don't checkpoint during MLP-only refine repeats
+            return attend
+        if mode == "no_mlp_checkpoint":
+            # Only checkpoint attention-heavy paths (encoder blocks + first decoder blocks)
+            # Skip decoder blocks that consume skip connections (more memory)
+            if block_idx < self.num_encoder_layers:
+                return True  # encoder blocks always have attention
+            else:
+                rel_idx = block_idx - self.num_encoder_layers
+                # Only checkpoint first half of decoder
+                return rel_idx < (self.num_decoder_layers // 2)
         if mode == "decoder":
             return block_idx >= self.num_encoder_layers
         if mode == "encoder":
@@ -517,7 +541,7 @@ class GPTMultiLayer(nn.Module):
                    attend: bool = True,
                    mix0: Tensor | None = None, mix1: Tensor | None = None,
                    attn_scale_v: Tensor | None = None, mlp_scale_v: Tensor | None = None) -> Tensor:
-        if self._should_checkpoint_block(block_idx) and self.training and torch.is_grad_enabled():
+        if self._should_checkpoint_block(block_idx, attend=attend, step_idx=step_idx) and self.training and torch.is_grad_enabled():
             return checkpoint(
                 lambda a, b: block(a, b, step_idx=step_idx, attend=attend,
                                    mix0=mix0, mix1=mix1,
