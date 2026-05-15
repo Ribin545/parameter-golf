@@ -23,10 +23,10 @@ export MLP_MULT=2
 export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
-# H100 Step 3: push VRAM even harder — 524k batch, aggressive compile, no safety limits
+# H100 Step 3: push VRAM — 320k batch, no checkpointing, no safety limits
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS=524288
-export TRAIN_BATCH_TOKENS=524288
+export MICRO_BATCH_TOKENS=327680
+export TRAIN_BATCH_TOKENS=327680
 export TRAIN_SEQ_LEN=1024
 
 # Optimizer / training recipe from winner family
@@ -99,8 +99,8 @@ export ITERATIONS=999999
 export MAX_WALLCLOCK_SECONDS=600
 
 echo "=========================================================================="
-echo "  H100 STEP 3 (push VRAM even harder)"
-echo "  NO checkpointing, NO recompute, batch 524288, compile=default"
+echo "  H100 STEP 3 (push VRAM)"
+echo "  NO checkpointing, NO recompute, batch 327680, compile=default"
 echo "  MODEL_TYPE=$MODEL_TYPE  LAYERS=$NUM_LAYERS  DIM=$MODEL_DIM  STEPS=$RECURRENCE_STEPS"
 echo "  HEADS=$NUM_HEADS  KV_HEADS=$NUM_KV_HEADS  MLP_MULT=$MLP_MULT"
 echo "  BATCH: ${TRAIN_BATCH_TOKENS} tokens/step  (micro=${MICRO_BATCH_TOKENS})"
