@@ -2,28 +2,30 @@
 
 ## Summary
 Exhaustive A/B testing of every optimization path to get step time under 600ms.  
-**ULTIMATE BREAKTHROUGH: `encoder_only` checkpointing achieves ~571ms (23% faster!) with 10.06 GiB VRAM — stable, safe, and identical quality.**
+**ULTIMATE BREAKTHROUGH: static mini-depth + kernel-fused attention output + forced Flash SDPA achieves ~507ms steady-state with 9.62 GiB VRAM and better final val_bpb.**
 
 ---
 
-## 🏆 ULTIMATE WINNING CONFIG: Static Mini-Depth
+## 🏆 ULTIMATE WINNING CONFIG: Static Mini-Depth + Safe Kernel Fusion
 
 ```bash
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
 export DISABLE_COMPILE=0
 export TORCH_COMPILE_MODE=default
+export ATTN_OUTPUT_MODE=einsum_fused
+export SDPA_BACKEND=flash
 export MINI_DEPTH_STATIC=1
 export MINI_DEPTH_REFINE_BLOCKS=3
 ```
 
 **Results:**
-- **Step time: ~541ms** (down from ~743ms) = **27% faster**
+- **Step time: ~507ms** steady-state (down from ~743ms) = **~32% faster**
 - **VRAM: 9.62 GiB** (safe on 24GB with 14+ GiB headroom)
-- **Stable across 950+ steps** with no recompilation spikes
-- **val_bpb: 1.5298** (better than baseline ~1.5390!)
-- **INT8 quantization: 0.0014 bpb degradation** (negligible)
-- **951 steps in 10 minutes** vs ~810 before = **17% more training**
+- **Stable across 1000+ steps** with no recompilation spikes
+- **val_bpb: 1.5173** (better than the prior 1.5298 and baseline ~1.5390)
+- **INT8 quantization: 0.0006 bpb degradation** (negligible)
+- **1001 steps in 10 minutes** vs ~810 before = **~24% more training**
 
 ---
 

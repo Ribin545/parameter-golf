@@ -98,7 +98,8 @@ export LOGIT_SOFTCAP=30.0
 export Z_LOSS_LAMBDA=0.0
 
 # Tier 1: layout-preserving attention output (avoids .contiguous() copy)
-export ATTN_OUTPUT_MODE=baseline
+# Phase 10 fusion win: einsum_fused is faster than baseline on the current graph
+export ATTN_OUTPUT_MODE=einsum_fused
 export QK_POST_MODE=baseline
 
 # =============================================================================
@@ -135,8 +136,8 @@ export MLP_RECOMPUTE=1
 export MLP_MEMORY_MODE=checkpoint
 export ATTN_MEMORY_MODE=off
 
-# Phase 9c: Flash Attention for speed
-export SDPA_BACKEND=auto
+# Phase 10 fusion win: forcing Flash SDPA beats auto on current static-mini-depth graph
+export SDPA_BACKEND=flash
 
 # Phase 9c: gradient norm target
 export TARGET_GRAD_NORM=0.8
