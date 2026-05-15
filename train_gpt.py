@@ -263,6 +263,23 @@ def _count_params(model: nn.Module) -> tuple[int, int]:
     return total, lora
 
 
+def _get_total_grad_norm(parameters, norm_type: float = 2.0) -> torch.Tensor:
+    """Backward-compatible total grad norm helper.
+
+    `torch.nn.utils.get_total_norm` is not available in some PyTorch builds
+    (e.g. certain 2.4.x environments). Fall back to `clip_grad_norm_` with
+    an infinite clip threshold, which returns the total norm without modifying
+    gradients in practice.
+    """
+    params = [p for p in parameters if p is not None and p.grad is not None]
+    if not params:
+        return torch.tensor(0.0)
+    get_total_norm = getattr(torch.nn.utils, "get_total_norm", None)
+    if get_total_norm is not None:
+        return get_total_norm([p.grad for p in params], norm_type=norm_type)
+    return torch.nn.utils.clip_grad_norm_(params, max_norm=float("inf"), norm_type=norm_type, error_if_nonfinite=False)
+
+
 def _estimate_unigram_log_probs_from_validation(
     val_tokens: torch.Tensor,
     vocab_size: int,
@@ -828,9 +845,7 @@ def main() -> None:
 
         # Optional dynamic gradient norm scaling
         if args.dynamic_lr_norm:
-            gnorm = torch.nn.utils.get_total_norm(
-                [p.grad for p in model.parameters() if p.grad is not None], norm_type=2
-            )
+            gnorm = _get_total_grad_norm(model.parameters(), norm_type=2)
             if gnorm > 0:
                 dyn_scale = min(1.0, args.target_grad_norm / (gnorm + 1e-6))
                 for p in model.parameters():
