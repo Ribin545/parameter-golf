@@ -333,6 +333,13 @@ def main() -> None:
     torch.backends.cuda.enable_math_sdp(False)
     torch.set_float32_matmul_precision("high")
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    # Fix H100/RunPod recompilation churn: train→eval grad_mode changes hit
+    # torch._dynamo cache limit. Increase so both train and eval graphs fit.
+    try:
+        import torch._dynamo as _dynamo
+        _dynamo.config.cache_size_limit = 16
+    except Exception:
+        pass
     if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1":
         try:
             # Keep CUDA graphs DISABLED for training — the compiled 12-step
