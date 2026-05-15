@@ -4,6 +4,8 @@
 Exhaustive A/B testing of every optimization path to get step time under 600ms.  
 **ULTIMATE BREAKTHROUGH: static mini-depth + kernel-fused attention output + forced Flash SDPA achieves ~507ms steady-state with 9.62 GiB VRAM and better final val_bpb.**
 
+**NEW H100 BREAKTHROUGH: an H100 80GB speed-oriented profile reached `val_bpb=1.4622` in the same 10-minute wallclock budget by completing 2348 steps with only ~11.69 GiB peak VRAM.**
+
 ---
 
 ## 🏆 ULTIMATE WINNING CONFIG: Static Mini-Depth + Safe Kernel Fusion
@@ -26,6 +28,52 @@ export MINI_DEPTH_REFINE_BLOCKS=3
 - **val_bpb: 1.5173** (better than the prior 1.5298 and baseline ~1.5390)
 - **INT8 quantization: 0.0006 bpb degradation** (negligible)
 - **1001 steps in 10 minutes** vs ~810 before = **~24% more training**
+
+---
+
+## 🚀 H100 80GB Wallclock Winner
+
+Using the same proven winner family but spending H100 VRAM to reduce recompute/checkpoint overhead, the H100 run achieved:
+
+- **final val_bpb: 1.4622**
+- **steps completed: 2348 in 600s**
+- **peak VRAM: 11.69 GiB**
+- **INT8 val_bpb: 1.4639**
+
+### H100 profile used
+
+```bash
+export MODEL_TYPE=multilayer
+export NUM_LAYERS=5
+export MODEL_DIM=512
+export NUM_HEADS=8
+export NUM_KV_HEADS=4
+export MLP_MULT=2
+export RECURRENCE_STEPS=2
+export MULTILAYER_LORA_RANK=8
+
+export MICRO_BATCH_TOKENS=262144
+export TRAIN_BATCH_TOKENS=262144
+
+export ATTN_OUTPUT_MODE=einsum_fused
+export SDPA_BACKEND=flash
+export MINI_DEPTH_STATIC=1
+export MINI_DEPTH_REFINE_BLOCKS=3
+
+export MULTILAYER_ACTIVATION_CHECKPOINT=1
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal
+export MLP_MEMORY_MODE=off
+export ATTN_MEMORY_MODE=off
+export MLP_RECOMPUTE=0
+```
+
+### Interpretation
+
+This is strong evidence that the core hypothesis was correct:
+- the winner training regime was still under a **wallclock step budget bottleneck**
+- better hardware plus a VRAM-for-speed memory policy can yield a much better final val_bpb in the same fixed time
+
+Even more importantly, the H100 result only used about **11.69 GiB / 80 GiB**, which means there is still substantial room for further throughput-oriented tuning.
 
 ---
 
