@@ -100,6 +100,23 @@ def _sdpa_context():
     return sdpa_kernel([SDPBackend.MATH])
 
 
+def _repeat_kv_for_gqa(k: Tensor, v: Tensor, num_heads: int, num_kv_heads: int) -> tuple[Tensor, Tensor]:
+    """Backward-compatible GQA fallback for older PyTorch SDPA builds.
+
+    Some environments support `enable_gqa=True` in scaled_dot_product_attention,
+    while others do not. When unsupported, explicitly repeat K/V heads so the
+    attention call can run without the keyword.
+    """
+    if num_kv_heads == num_heads:
+        return k, v
+    repeat_factor = num_heads // num_kv_heads
+    if repeat_factor <= 1:
+        return k, v
+    k = k.repeat_interleave(repeat_factor, dim=1)
+    v = v.repeat_interleave(repeat_factor, dim=1)
+    return k, v
+
+
 class ShellCenteringPenalty(nn.Module):
     """Regularises embeddings to stay outside a shell of radius ~sqrt(d-0.1)
     while keeping the centroid near the origin. Prevents drift/collapse.
@@ -327,8 +344,14 @@ class CausalSelfAttention(nn.Module):
         q = q * q_gain
 
         with _sdpa_context():
-            y = F.scaled_dot_product_attention(q, k, v, is_causal=True,
-                                               enable_gqa=(self.num_kv_heads != self.num_heads))
+            try:
+                y = F.scaled_dot_product_attention(
+                    q, k, v, is_causal=True,
+                    enable_gqa=(self.num_kv_heads != self.num_heads)
+                )
+            except TypeError:
+                k_fallback, v_fallback = _repeat_kv_for_gqa(k, v, self.num_heads, self.num_kv_heads)
+                y = F.scaled_dot_product_attention(q, k_fallback, v_fallback, is_causal=True)
         return self._project_attn_output(y, dim=dim, step_idx=step_idx)
 
 
