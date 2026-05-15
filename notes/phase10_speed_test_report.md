@@ -496,6 +496,70 @@ export RECURRENT_ATTN_EVERY=2
 
 ---
 
+## H100 / RunPod Follow-Up Issue (Needs Revisit)
+
+During H100 SXM / RunPod testing, two compatibility issues were fixed successfully:
+- older PyTorch builds without `enable_gqa` support in `scaled_dot_product_attention`
+- older PyTorch builds without `torch.nn.utils.get_total_norm`
+
+However, there is still an important **compiler / recompilation issue** that should be revisited explicitly.
+
+### Observed problem
+
+On RunPod with:
+- **NVIDIA H100 80GB HBM3**
+- **PyTorch 2.4.1+cu124**
+
+the training run emitted repeated TorchDynamo / FX warnings such as:
+
+```text
+torch._dynamo hit config.cache_size_limit (8)
+last reason: ___check_obj_id(L['self'].base, ...)
+```
+
+This points to recompilation churn inside the LoRA wrapper path in `model_multilayer.py`, specifically around:
+
+```python
+class LoRALinear(nn.Module):
+    def forward(self, x, step_idx=0):
+        y = self.base(x)
+```
+
+### Current interpretation
+
+This looks like a **TorchDynamo guard instability / compiler portability issue**, not a scientific or architectural failure.
+
+The likely source is the interaction of:
+- compiled `forward_logits`
+- nested checkpointing
+- repeated re-entry through `LoRALinear.forward()`
+- object-identity guards on `self.base`
+
+### Why this matters
+
+Even if the run does not crash, repeated recompilation can:
+- reduce effective throughput
+- increase compile overhead
+- reduce reproducibility
+- make Hopper/RunPod behavior diverge from the historical 3090/Windows winner path
+
+### Status
+
+This is **not fixed yet**.
+
+It should be treated as an explicit follow-up systems task before drawing strong conclusions from H100 wallclock-quality comparisons.
+
+### Suggested revisit directions
+
+1. reduce or isolate compilation around `LoRALinear.forward()`
+2. avoid unstable object-identity guards on `self.base`
+3. test whether compiling a different boundary reduces recompilation churn
+4. compare H100 behavior with and without LoRA wrapper-path compilation
+
+This issue should remain visible in the notes because it may be the main blocker to clean H100 scaling experiments.
+
+---
+
 ## Final Recommendation
 
 **Use `encoder_only` for all production runs:**
