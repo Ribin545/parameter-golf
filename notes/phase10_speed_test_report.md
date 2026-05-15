@@ -259,6 +259,11 @@ INT8 degradation: only 0.0002 bpb — negligible.
 6. **Selective checkpointing**: 5 policies, `no_mlp_checkpoint` at ~636ms
 7. **Aggressive policies**: `encoder_only` at **~571ms** 🏆
 8. **10-min verified**: 901 steps, stable, val_bpb 1.5390
+9. **Static mini-depth + safe kernel fusion**: `einsum_fused + flash` reached ~507ms, val_bpb 1.5173
+10. **Refine-tail specialization rejected**: microbenchmark improved, but 10-minute val_bpb regressed to 1.5188
+11. **MLP inline projection v2 rejected**: microbenchmark improved, but 10-minute val_bpb regressed to 1.5193
+12. **Checkpoint-boundary retest**: `minimal` reached ~456–476ms and 11.47 GiB VRAM, but 10-minute val_bpb regressed to 1.5187
+13. **Naive end-to-end Triton MLP v2 forward-only rejected**: correct numerically, but ~65.18ms vs baseline 4.83ms (0.074x)
 
 ---
 
@@ -276,6 +281,11 @@ INT8 degradation: only 0.0002 bpb — negligible.
 | 8 | Disable shell centering | ~742ms | -1ms | 7.9 GiB | Negligible |
 | 9 | Disable bigram hash | ~742ms | -1ms | 7.9 GiB | Negligible |
 | 10 | Disable Triton MLP | +38ms | Worse | 7.9 GiB | ❌ Slower |
+| 11 | `einsum_fused` + `flash` on static mini-depth | **~507ms** | **-236ms** | **9.62 GiB** | ✅ Best verified winner |
+| 12 | Specialized refine-tail path | ~503-515ms | -228ms | 9.62 GiB | ❌ Final val_bpb regression (1.5188) |
+| 13 | MLP inline projection v2 | ~504-516ms | -227ms | 9.62 GiB | ❌ Final val_bpb regression (1.5193) |
+| 14 | `minimal` checkpoint policy on fused winner | ~456-476ms | -267ms | 11.47 GiB | ❌ Final val_bpb regression (1.5187) |
+| 15 | Naive full Triton MLP v2 forward-only | 65.18ms fwd vs 4.83ms baseline | Much worse | n/a | ❌ Wrong kernel design |
 
 ---
 
@@ -306,14 +316,108 @@ See full explanation in earlier version. Key point:
 ### Commit `0da3a01`: Remove bigram logit dead code
 ### Commit `12f19bc`: Add 5 selective checkpointing policies
 ### Commit `4099757`: Apply `no_mlp_checkpoint` to trial_5090.sh
-### Commit `XXXXXXX`: Upgrade to `encoder_only`, add aggressive policies
+### Commit `512516b`: Fusion breakthrough — `einsum_fused + flash` reaches ~507ms and val_bpb 1.5173
+
+### Rejected / local-only experiments (not pushed as winners)
+- Specialized refine-tail path in `model_multilayer.py`
+- `MLP_FUSED_V2=1` inline projection experiment
+- `minimal` checkpoint policy on top of fused static mini-depth
+- `triton_mlp_v2.py` forward-only naive end-to-end MLP fusion prototype
 
 ### Files Changed
 - `model_multilayer.py` — 7 checkpoint policies, `_should_checkpoint_block()` with `attend` param
 - `trial_5090.sh` — Updated to `encoder_only` + compile ON
 - `bench_checkpoint_policies.py` — Original 5-policy benchmark
 - `bench_aggressive_policies.py` — Extended 7-policy benchmark
+- `triton_mlp_v2.py` — forward-only experimental full-fuse MLP prototype (rejected)
+- `test_triton_mlp_v2_forward.py` — benchmark harness for the rejected MLP v2 prototype
 - `notes/phase10_speed_test_report.md` — This report
+
+---
+
+## MLP Fusion Research Log
+
+### MLP Experiment 1 — Inline projection after Triton fused activation
+
+**Hypothesis:**
+Keep the current fused `fc + relu²`, but inline the projection as a direct cached `F.linear(...)` so Inductor sees a cleaner graph.
+
+**Implementation:**
+- added `MLP_FUSED_V2=1`
+- added `_proj_linear()` in `MLP`
+- replaced `self.proj(x)` with an inline projection path after Triton fused activation
+
+**Results:**
+- isolated benchmark: **469.4ms → 455.3ms**
+- short training: looked clean
+- 10-minute final: **1.5193 val_bpb**
+
+**Verdict:** rejected
+
+**Why it failed:**
+It improved isolated step time but slightly worsened long-run training outcome versus the pushed winner **1.5173**.
+
+### MLP Experiment 2 — Naive full Triton MLP v2 forward-only
+
+**Hypothesis:**
+Fuse the full MLP forward into one Triton path:
+`x -> (x @ w1 -> relu²) -> @ w2`
+
+**Implementation:**
+- created `triton_mlp_v2.py`
+- created `test_triton_mlp_v2_forward.py`
+- forward-only prototype, intentionally isolated from training path
+
+**Results:**
+- correctness: **max_abs_diff = 0.0**
+- baseline forward: **4.83ms**
+- fused v2 forward: **65.18ms**
+- speedup: **0.074x**
+
+**Verdict:** rejected immediately
+
+**Why it failed:**
+The naïve fully fused design was dramatically slower than the existing split path. This shows that simply merging two GEMMs into one Triton kernel is not automatically beneficial; the hidden tiling / reuse strategy was poor.
+
+### MLP Experiment 3 — Grouped / split partial fusion (rejected)
+
+**Hypothesis:**
+Instead of full end-to-end fusion, split hidden dimension into groups:
+`out += relu2(x @ W1_group) @ W2_group` for each group.
+
+**Implementation:**
+- `triton_mlp_grouped.py` — fused fc+activation per group, then immediate projection
+- `test_mlp_grouped.py` — benchmark with group sizes 128, 256, 512
+
+**Results:**
+| Variant | Forward Time | vs Baseline | Correctness |
+|---------|-------------|-------------|-------------|
+| baseline | 4.771 ms | 1.000x | ✅ max_diff=0.0 |
+| grouped_128 | 9.323 ms | 0.512x | ❌ max_diff=1589248.0 |
+| grouped_256 | 7.018 ms | 0.680x | ❌ max_diff=23592960.0 |
+| grouped_512 | 5.552 ms | 0.859x | ❌ NaN |
+
+**Verdict:** rejected
+
+**Why it failed:**
+1. **Slower than baseline**: all grouped variants are slower, not faster. The serial Python loop over groups cannot match cuBLAS parallelism.
+2. **Correctness broken**: wrong stride/parameter ordering in the Triton kernel led to garbage outputs (massive max_diff, NaN).
+3. **Design flaw**: even if fixed, the kernel still writes hidden tiles to global memory before projecting them, so it doesn't truly avoid materialization. The "grouped" approach was not actually a streaming fusion - it was just a loop over smaller chunks with higher overhead.
+
+### MLP Experiment 4 — Future directions identified
+
+After the failed grouped attempt, the remaining serious MLP research paths are:
+1. **Blocked / streaming two-stage kernel**
+   - compute hidden tiles
+   - immediately contract into output tiles inside the same kernel
+   - avoid materializing full hidden AND avoid host-level looping
+
+2. **Optimize the handoff instead of full fusion**
+   - accept two stages
+   - optimize the boundary between fused activation output and projection GEMM
+   - this proved promising in the handoff benchmark (2x speedup potential for projection alone)
+
+These are not yet promoted results — they are the next research directions.
 
 ---
 
