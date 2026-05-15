@@ -44,7 +44,13 @@ if [ ! -f trial_5090.sh ]; then
     exit 1
 fi
 
-# --- Step 2: Install Python dependencies only (keep pod's existing torch/CUDA stack) ---
+# --- Step 2: Force repo-local data/tokenizer paths for launched scripts ---
+# This avoids stale pod-level /workspace/data/... environment variables leaking
+# into trial launchers when the repo already contains downloaded assets.
+export DATA_PATH="$REPO_DIR/data/datasets/fineweb10B_sp1024"
+export TOKENIZER_PATH="$REPO_DIR/data/tokenizers/fineweb_1024_bpe.model"
+
+# --- Step 3: Install Python dependencies only (keep pod's existing torch/CUDA stack) ---
 echo "[bootstrap] Installing Python dependencies (no torch reinstall)..."
 python3 -m pip install --upgrade pip --quiet
 python3 -m pip install numpy tqdm huggingface-hub kernels setuptools typing-extensions==4.15.0 datasets tiktoken sentencepiece triton --quiet
@@ -53,10 +59,22 @@ import torch
 print('[bootstrap] torch_check', torch.__version__, 'cuda=', torch.version.cuda)
 PY
 
-# --- Step 3: Run 5090 throughput training ---
-echo "[bootstrap] Launching 5090 throughput training..."
-chmod +x trial_5090.sh
-./trial_5090.sh
+# --- Step 4: Auto-select launcher ---
+GPU_NAME="$(python3 - <<'PY'
+import torch
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
+PY
+)"
+
+if echo "$GPU_NAME" | grep -qi "H100"; then
+    echo "[bootstrap] Detected H100 — launching trial_h100.sh"
+    chmod +x trial_h100.sh
+    ./trial_h100.sh
+else
+    echo "[bootstrap] Launching 5090 throughput training..."
+    chmod +x trial_5090.sh
+    ./trial_5090.sh
+fi
 
 echo ""
 echo "=========================================="
