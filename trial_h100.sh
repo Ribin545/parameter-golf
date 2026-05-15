@@ -23,10 +23,10 @@ export MLP_MULT=2
 export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
-# Keep historical winner batch first (single-change progression)
+# H100 Step 2: push VRAM for speed — max batch, no checkpoint/recompute overhead
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS=153600
-export TRAIN_BATCH_TOKENS=153600
+export MICRO_BATCH_TOKENS=262144
+export TRAIN_BATCH_TOKENS=262144
 export TRAIN_SEQ_LEN=1024
 
 # Optimizer / training recipe from winner family
@@ -78,12 +78,12 @@ export SDPA_BACKEND=flash
 export MINI_DEPTH_STATIC=1
 export MINI_DEPTH_REFINE_BLOCKS=3
 
-# Step 1 single change: only checkpoint mode changes
-export MULTILAYER_ACTIVATION_CHECKPOINT=1
-export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal
-export MLP_MEMORY_MODE=checkpoint
+# Step 2: push VRAM — disable ALL checkpointing/recompute for minimum overhead
+export MULTILAYER_ACTIVATION_CHECKPOINT=0
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off
+export MLP_MEMORY_MODE=off
 export ATTN_MEMORY_MODE=off
-export MLP_RECOMPUTE=1
+export MLP_RECOMPUTE=0
 
 # Data / eval / export
 export DATA_DETERMINISTIC=1
@@ -99,12 +99,13 @@ export ITERATIONS=999999
 export MAX_WALLCLOCK_SECONDS=600
 
 echo "=========================================================================="
-echo "  H100 STEP 1 (single-change progression)"
-echo "  ONLY change from historical winner: CHECKPOINT_MODE=minimal"
+echo "  H100 STEP 2 (push VRAM for speed)"
+echo "  NO checkpointing, NO recompute, max batch 262144"
 echo "  MODEL_TYPE=$MODEL_TYPE  LAYERS=$NUM_LAYERS  DIM=$MODEL_DIM  STEPS=$RECURRENCE_STEPS"
 echo "  HEADS=$NUM_HEADS  KV_HEADS=$NUM_KV_HEADS  MLP_MULT=$MLP_MULT"
 echo "  BATCH: ${TRAIN_BATCH_TOKENS} tokens/step  (micro=${MICRO_BATCH_TOKENS})"
 echo "  CHECKPOINTING: enabled=${MULTILAYER_ACTIVATION_CHECKPOINT} mode=${MULTILAYER_ACTIVATION_CHECKPOINT_MODE}"
+echo "  MLP_RECOMPUTE=$MLP_RECOMPUTE"
 echo "  torch.compile: ON ($TORCH_COMPILE_MODE)"
 echo "=========================================================================="
 
