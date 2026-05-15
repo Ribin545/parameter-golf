@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# trial_h100.sh — H100 80GB speed-oriented multilayer run
-# Goal: maximize steps/10min by spending VRAM to reduce checkpoint/recompute
-# overhead while preserving the proven fused winner knobs.
+# trial_h100.sh — H100 Step 1 single-change progression run
+# Goal: keep the historical winner recipe intact and change ONLY:
+#   MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only -> minimal
+# This preserves the existing bootstrap flow while testing one H100 change.
 # =============================================================================
 set -euo pipefail
 
@@ -22,10 +23,10 @@ export MLP_MULT=2
 export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
-# H100: spend VRAM for speed first
+# Keep historical winner batch first (single-change progression)
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS=262144
-export TRAIN_BATCH_TOKENS=262144
+export MICRO_BATCH_TOKENS=153600
+export TRAIN_BATCH_TOKENS=153600
 export TRAIN_SEQ_LEN=1024
 
 # Optimizer / training recipe from winner family
@@ -77,12 +78,12 @@ export SDPA_BACKEND=flash
 export MINI_DEPTH_STATIC=1
 export MINI_DEPTH_REFINE_BLOCKS=3
 
-# H100 speed-oriented memory policy: reduce recompute/checkpointing
+# Step 1 single change: only checkpoint mode changes
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal
-export MLP_MEMORY_MODE=off
+export MLP_MEMORY_MODE=checkpoint
 export ATTN_MEMORY_MODE=off
-export MLP_RECOMPUTE=0
+export MLP_RECOMPUTE=1
 
 # Data / eval / export
 export DATA_DETERMINISTIC=1
@@ -98,12 +99,12 @@ export ITERATIONS=999999
 export MAX_WALLCLOCK_SECONDS=600
 
 echo "=========================================================================="
-echo "  H100 80GB SPEED PROFILE (VRAM-for-speed)"
+echo "  H100 STEP 1 (single-change progression)"
+echo "  ONLY change from historical winner: CHECKPOINT_MODE=minimal"
 echo "  MODEL_TYPE=$MODEL_TYPE  LAYERS=$NUM_LAYERS  DIM=$MODEL_DIM  STEPS=$RECURRENCE_STEPS"
 echo "  HEADS=$NUM_HEADS  KV_HEADS=$NUM_KV_HEADS  MLP_MULT=$MLP_MULT"
 echo "  BATCH: ${TRAIN_BATCH_TOKENS} tokens/step  (micro=${MICRO_BATCH_TOKENS})"
 echo "  CHECKPOINTING: enabled=${MULTILAYER_ACTIVATION_CHECKPOINT} mode=${MULTILAYER_ACTIVATION_CHECKPOINT_MODE}"
-echo "  MLP_MEMORY_MODE=$MLP_MEMORY_MODE  MLP_RECOMPUTE=$MLP_RECOMPUTE"
 echo "  torch.compile: ON ($TORCH_COMPILE_MODE)"
 echo "=========================================================================="
 
