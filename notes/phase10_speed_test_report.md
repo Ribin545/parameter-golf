@@ -421,6 +421,81 @@ These are not yet promoted results — they are the next research directions.
 
 ---
 
+## Reproducibility Note — Compile Target Matters
+
+After the original best run (**val_bpb 1.5173**) was recorded, a later rerun using the same high-level config family did **not** reproduce the result and instead finished around **1.5327**.
+
+I traced the most important tracked-code difference to `train_gpt.py`:
+
+```diff
+- base_model.forward_logits = torch.compile(base_model.forward_logits, mode=compile_mode)
++ base_model.forward = torch.compile(base_model.forward, mode=compile_mode)
+```
+
+This compile-target change is materially important.
+
+### Reproduction test
+
+Using the current winner config family:
+- compiling full `forward` produced a rerun around **1.5327 val_bpb**
+- temporarily restoring compilation of `forward_logits` improved the rerun to about **1.5191 val_bpb**
+
+This does **not** fully prove that compile-target drift is the only source of the gap, but it is strong evidence that the compile boundary affects long-run training behavior and final quality.
+
+### Practical conclusion
+
+For faithful reproduction of the historical best result, the compile target should be treated as part of the winning recipe, not as an implementation detail.
+
+---
+
+## Exact Winner Recipe + Reproduction Caveats
+
+### Historical best validated winner
+
+The best verified Phase 10 result was:
+- **final val_bpb: 1.5173**
+- **steady-state step time: ~500–512ms**
+- **peak VRAM: 9.62 GiB**
+
+### Core winner settings
+
+```bash
+export MULTILAYER_ACTIVATION_CHECKPOINT=1
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
+export DISABLE_COMPILE=0
+export TORCH_COMPILE_MODE=default
+export ATTN_OUTPUT_MODE=einsum_fused
+export SDPA_BACKEND=flash
+export MINI_DEPTH_STATIC=1
+export MINI_DEPTH_REFINE_BLOCKS=3
+export MLP_MEMORY_MODE=checkpoint
+export ATTN_MEMORY_MODE=off
+export MLP_RECOMPUTE=1
+export RECURRENT_ATTN_EVERY=2
+```
+
+### Important reproduction caveats
+
+1. **Compile target matters**
+   - historical best behavior is associated with compiling `forward_logits`
+   - compiling full `forward` produced a noticeably worse rerun in later testing
+
+2. **Run-to-run exact reproduction is not guaranteed**
+   - even with matching env vars, there appears to be some sensitivity to compile/runtime behavior
+   - full 10-minute val_bpb should be treated as the real validation gate
+
+3. **Do not assume microbenchmark wins imply training wins**
+   - several faster variants regressed final 10-minute val_bpb:
+     - refine-tail specialization
+     - MLP inline projection v2
+     - `minimal` checkpoint policy
+
+4. **The current best known result is a narrow optimum**
+   - later experiments often improved speed while slightly hurting final quality
+   - the system should be treated as co-optimized across architecture, checkpointing, compile target, and kernel choices
+
+---
+
 ## Final Recommendation
 
 **Use `encoder_only` for all production runs:**
