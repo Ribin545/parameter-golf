@@ -120,15 +120,15 @@ export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
 export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=1
-export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal
 
 # Static mini-depth: step 1 only runs last K blocks (K=3 is the sweet spot)
 # ~541ms step time (15% faster), val_bpb 1.5298 (better than 1.5390)
 export MINI_DEPTH_STATIC=1
 export MINI_DEPTH_REFINE_BLOCKS=3
 
-# Tier 3.1 — Recomputed MLP backward (save ~600MB VRAM per MLP at cost of ~0.3ms)
-export MLP_RECOMPUTE=1
+# Aggressive speed trade: spend VRAM to remove recompute overhead
+export MLP_RECOMPUTE=0
 
 # Phase 10: selective checkpointing — no_mlp_checkpoint skips second half of decoder
 # MLP still uses custom autograd (Triton fused), block-level ckpt handles attention
