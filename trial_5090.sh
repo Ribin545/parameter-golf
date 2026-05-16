@@ -47,7 +47,7 @@ fi
 # =============================================================================
 export MODEL_TYPE=multilayer
 export NUM_LAYERS=5
-export MODEL_DIM=484
+export MODEL_DIM=512
 export NUM_HEADS=8
 export NUM_KV_HEADS=4
 export MLP_MULT=2
@@ -55,11 +55,11 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: max tokens/step — test if 5090 can handle full batch
+# Batch: high-throughput sweet spot for 5090
 # =============================================================================
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-393216}"
-export TRAIN_BATCH_TOKENS=393216
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-153600}"
+export TRAIN_BATCH_TOKENS=153600
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
