@@ -203,6 +203,7 @@ class Hyperparameters:
     quant_eval = bool(int(os.environ.get("QUANT_EVAL", "1")))
     quant_eval_max_steps = int(os.environ.get("QUANT_EVAL_MAX_STEPS", "50"))
     quant_eval_stride = int(os.environ.get("QUANT_EVAL_STRIDE", "64"))
+    official_eval_mode = bool(int(os.environ.get("OFFICIAL_EVAL_MODE", "0")))
 
     # Loss filter
     loss_filter_enabled = bool(int(os.environ.get("LOSS_FILTER_ENABLED", "0")))
@@ -743,10 +744,17 @@ def main() -> None:
             eval_stride = args.quant_eval_stride if last_step else args.train_seq_len
             eval_max_steps = args.final_val_eval_max_steps if last_step else args.val_eval_max_steps
             eval_max_steps = None if eval_max_steps <= 0 else eval_max_steps
+            # Official eval mode: full split, no sliding window, no TTT
+            if args.official_eval_mode:
+                eval_stride = args.train_seq_len
+                eval_max_steps = None
+                ttt_lr_for_eval = 0.0
+            else:
+                ttt_lr_for_eval = args.ttt_lr
             val_loss, val_bpb = eval_val(args, model, rank, world_size, device, grad_accum_steps,
                                          val_tokens, base_bytes_lut, has_leading_space_lut,
                                          is_boundary_token_lut, max_steps=eval_max_steps, stride=eval_stride,
-                                         ttt_lr=args.ttt_lr)
+                                         ttt_lr=ttt_lr_for_eval)
 
             # Restore trained weights by swapping .data references back
             _restore_named_parameter_data(base_model, ema_swap)
@@ -801,8 +809,16 @@ def main() -> None:
         for opt in optimizers:
             opt.zero_grad(set_to_none=True)
         step_loss_tensor = torch.zeros((), device=device, dtype=torch.float32)
+        # CRITICAL FIX: grad accumulation scaling
+        # "mean" = mathematically correct full-batch equivalent (loss / grad_accum_steps)
+        # "sum"  = old aggressive recurrent-style (no division, stronger shared-weight signal)
+        accum_scale_mode = os.environ.get("ACCUM_BACKWARD_SCALE", "mean").strip().lower()
+        # loss_log_scale ALWAYS divides by grad_accum_steps for correct logging
         loss_log_scale = 1.0 / grad_accum_steps
-        backward_scale = loss_log_scale
+        if accum_scale_mode == "sum":
+            backward_scale = 1.0
+        else:
+            backward_scale = loss_log_scale
 
         for _ in range(grad_accum_steps):
             # Determine training seq_len (curriculum if enabled)
