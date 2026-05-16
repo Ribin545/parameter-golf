@@ -154,7 +154,7 @@ export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 export SCHEDULE_FREE=1
 export WARMUP_STEPS=40
 export TRAIN_LOG_EVERY=50
-export VAL_LOSS_EVERY=100
+export VAL_LOSS_EVERY=200
 export QUANT_EVAL=1
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
@@ -193,7 +193,7 @@ run_training() {
     export MAX_WALLCLOCK_SECONDS=$wallclock
     export ITERATIONS=$iters
 
-    python3 -u train_gpt.py
+    torchrun --standalone --nproc_per_node=1 train_gpt.py
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
