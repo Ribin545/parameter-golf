@@ -144,7 +144,7 @@ export TARGET_GRAD_NORM=0.8
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.0       # No dropout — test if 5090 overfits or converges faster
+export DROPOUT_P=0.30       # Phase 9b: -0.10 from baseline, recover gradient signal
 export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 
 # =============================================================================
