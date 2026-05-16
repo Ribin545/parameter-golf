@@ -55,12 +55,11 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: 150k tokens/step — true micro-batch, no grad accum
-# val_bpb: 1.5595 @S709 (10-min RTX 3090) vs 1.5708 @S986 for 100k
+# Batch: max tokens/step — test if 5090 can handle full batch
 # =============================================================================
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-153600}"
-export TRAIN_BATCH_TOKENS=153600
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-458752}"
+export TRAIN_BATCH_TOKENS=458752
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
