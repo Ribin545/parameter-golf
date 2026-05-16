@@ -119,8 +119,8 @@ export SHELL_CENTERING_ENABLED=1
 export SHELL_CENTERING_LAM=0.005  # Phase 9b: relaxed shell constraint
 export TIE_EMBEDDINGS=0    # ablation: -2.55% val_bpb (weight tying hurts at 2-step recurrence)
 export TIED_EMBED_INIT_STD=0.005
-export MULTILAYER_ACTIVATION_CHECKPOINT=1
-export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal
+export MULTILAYER_ACTIVATION_CHECKPOINT=0
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off
 
 # Static mini-depth: step 1 only runs last K blocks (K=3 is the sweet spot)
 # ~541ms step time (15% faster), val_bpb 1.5298 (better than 1.5390)
