@@ -130,9 +130,8 @@ export MINI_DEPTH_REFINE_BLOCKS=3
 # Aggressive speed trade: spend VRAM to remove recompute overhead
 export MLP_RECOMPUTE=0
 
-# Phase 10: selective checkpointing — no_mlp_checkpoint skips second half of decoder
-# MLP still uses custom autograd (Triton fused), block-level ckpt handles attention
-export MLP_MEMORY_MODE=checkpoint
+# Phase 10: spend more VRAM to remove remaining MLP checkpoint overhead
+export MLP_MEMORY_MODE=off
 export ATTN_MEMORY_MODE=off
 
 # Phase 10 fusion win: forcing Flash SDPA beats auto on current static-mini-depth graph
