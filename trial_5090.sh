@@ -58,8 +58,8 @@ export MULTILAYER_LORA_RANK=8
 # Batch: max tokens/step — test if 5090 can handle full batch
 # =============================================================================
 export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-458752}"
-export TRAIN_BATCH_TOKENS=458752
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-393216}"
+export TRAIN_BATCH_TOKENS=393216
 export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
