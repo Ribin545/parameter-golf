@@ -627,3 +627,54 @@ export TORCH_COMPILE_MODE=default
 - **Stable, no spikes, no OOM**
 
 To go even faster (under 500ms), try `minimal` policy (only block 0 checkpointed) — but verify quality first.
+
+---
+
+## RTX 5090 32GB RunPod Result (2025-05-16)
+
+First verified run on NVIDIA GeForce RTX 5090 (32 GiB VRAM) via RunPod. Same config as 3090 winner with batch=153600 tokens/step.
+
+### Environment
+```
+PyTorch 2.9.1+cu128  |  CUDA: 12.8
+GPU: NVIDIA GeForce RTX 5090  (31.37 GiB)
+Triton: 3.5.1
+```
+
+### Key Results
+
+| Metric | RTX 3090 (24GB) | RTX 5090 (32GB) | Δ |
+|--------|-----------------|-----------------|---|
+| Step time | ~520ms | **~209ms** | **2.5× faster** |
+| Steps in 600s | ~1150 | **2422** | **2.1× more steps** |
+| Best val_bpb | 1.5390 | **1.4544** | **-0.0846** |
+| Peak VRAM | ~10.9 GiB | ~10.92 GiB | Same |
+| INT8 degradation | +0.0006 bpb | **+0.0009 bpb** | Negligible |
+
+### val_bpb progression
+
+```
+step:200   val_bpb: 2.0729
+step:400   val_bpb: 1.7185
+step:600   val_bpb: 1.6490
+step:800   val_bpb: 1.6071
+step:1000  val_bpb: 1.5838
+step:1200  val_bpb: 1.5643
+step:1400  val_bpb: 1.5526
+step:1600  val_bpb: 1.5451
+step:1800  val_bpb: 1.5359
+step:2000  val_bpb: 1.5275
+step:2200  val_bpb: 1.5163
+step:2400  val_bpb: 1.5151
+step:2422  val_bpb: 1.4544  ← FINAL BEST
+```
+
+### Analysis
+
+The 5090 achieves **1.4544 val_bpb** vs the 3090's **1.5390** — a **5.5% absolute improvement** in the same 10-minute wallclock budget. This is primarily due to:
+
+1. **2.5× faster step time** (~209ms vs ~520ms) — Blackwell architecture + faster memory
+2. **2.1× more training steps** (2422 vs ~1150) — more gradient updates in fixed time
+3. **Same VRAM footprint** (~10.9 GiB) — architecture scales perfectly with hardware
+
+The 5090 still has ~20 GiB of unused VRAM headroom, suggesting batch size can be increased further for even better convergence.
