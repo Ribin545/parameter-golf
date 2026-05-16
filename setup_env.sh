@@ -5,16 +5,59 @@
 # =============================================================================
 set -euo pipefail
 
-PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
+PYTHON_VERSION="${PYTHON_VERSION:-}"
 VENV_NAME="${VENV_NAME:-pg_env}"
 VENV_DIR="$HOME/.venvs/$VENV_NAME"
 
+
+
+# =============================================================================
 echo "=========================================="
 echo "  Parameter Golf Environment Setup"
 echo "=========================================="
 echo "Python: $PYTHON_VERSION"
 echo "VENV: $VENV_DIR"
 echo ""
+
+# --- Pre-flight: NVIDIA Driver + CUDA Toolkit check ---
+echo "[preflight] Checking NVIDIA driver..."
+if command -v nvidia-smi &> /dev/null; then
+    DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | tr -d '[:space:]')
+    echo "[preflight] NVIDIA driver detected: $DRIVER_VER"
+else
+    echo "[ERROR] nvidia-smi not found. NVIDIA driver is required."
+    echo "[ERROR] On Windows WSL: install the driver from https://www.nvidia.com/Download/index.aspx"
+    echo "[ERROR] On Ubuntu: sudo apt install -y nvidia-driver-560  # or latest"
+    exit 1
+fi
+
+echo "[preflight] Checking CUDA toolkit (nvcc)..."
+if command -v nvcc &> /dev/null; then
+    NVCC_VER=$(nvcc --version | grep "release" | sed 's/.*release //; s/,.*//')
+    echo "[preflight] CUDA toolkit detected: $NVCC_VER"
+else
+    echo "[preflight] nvcc not found. CUDA toolkit is needed for cu130 wheels."
+    echo "[preflight] Attempting to install CUDA 13.0 toolkit..."
+    if command -v apt-get &> /dev/null; then
+        UBUNTU_CODENAME=$(lsb_release -cs 2>/dev/null || echo "ubuntu2404")
+        wget -q "https://developer.download.nvidia.com/compute/cuda/repos/${UBUNTU_CODENAME}/x86_64/cuda-keyring_1.1-1_all.deb" -O /tmp/cuda-keyring.deb || \
+            wget -q "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb" -O /tmp/cuda-keyring.deb
+        sudo dpkg -i /tmp/cuda-keyring.deb
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq cuda-toolkit-13-0
+        if command -v nvcc &> /dev/null; then
+            echo "[preflight] CUDA 13.0 toolkit installed successfully."
+        else
+            echo "[ERROR] CUDA toolkit installation failed."
+            exit 1
+        fi
+    else
+        echo "[ERROR] Cannot auto-install CUDA toolkit. Please install manually:"
+        echo "    https://developer.nvidia.com/cuda-downloads"
+        exit 1
+    fi
+fi
+
 
 # --- Step 1: Ensure Python is installed ---
 PYTHON_CMD=$(command -v python$PYTHON_VERSION 2>/dev/null || command -v python3 2>/dev/null || command -v python 2>/dev/null || echo "")
@@ -43,12 +86,8 @@ PY_MINOR=$($PYTHON_CMD -c "import sys; print(sys.version_info.minor)")
 echo "[check] Detected Python ${PY_MAJOR}.${PY_MINOR}"
 
 if [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -ge 14 ]; then
-    echo "[WARNING] Python 3.14+ is not yet supported by PyTorch CUDA wheels."
-    echo "[WARNING] Falling back to CPU-only PyTorch (or install Python 3.11/3.12 manually)."
-    echo "[WARNING] For CUDA support, install Python 3.11 or 3.12 from deadsnakes:"
-    echo "    sudo add-apt-repository ppa:deadsnakes/ppa -y"
-    echo "    sudo apt-get install -y python3.11 python3.11-venv python3.11-dev"
-    echo "    Then run: PYTHON_VERSION=3.11 ./setup_env.sh"
+    echo "[WARNING] Python 3.14+ detected. PyTorch cu130 has limited wheels for 3.14."
+    echo "[WARNING] If torch import fails, your system may need the CUDA 13.0 toolkit installed."
 fi
 
 # --- Step 2: Create virtual environment ---
@@ -70,6 +109,11 @@ echo "[info] Detected CUDA version: $CUDA_VER"
 case "$CUDA_VER" in
     13.*)
         echo "[install] CUDA 13.0 detected → PyTorch 2.11.0+cu130"
+        echo "[WARNING] cu130 requires CUDA 13.0 system libraries (libcudart.so.13)."
+        echo "[WARNING] If import torch fails with 'libcudart.so.13 not found', install CUDA 13.0 toolkit first:"
+        echo "    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb"
+        echo "    sudo dpkg -i cuda-keyring_1.1-1_all.deb"
+        echo "    sudo apt-get update && sudo apt-get install -y cuda-toolkit-13-0"
         python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
         ;;
     12.8|12.6)
