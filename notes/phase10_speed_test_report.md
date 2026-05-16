@@ -698,3 +698,77 @@ step:2424  val_bpb: 1.4545  ← FINAL BEST
 ```
 
 **Analysis:** Increasing batch from 153600 to 393216 produced **no measurable improvement** in final val_bpb (1.4545 vs 1.4544). The 5090's training appears **compute-bound rather than sample-efficiency bound** in the 10-minute wallclock — step time did not decrease despite larger batch, suggesting the model was already saturating the GPU. The 153600 batch remains the efficient sweet spot.
+
+### 5090 Quality Tuning Win: longer warmup + lower dropout
+
+After restoring the high-throughput 153600-token batch / 512-dim profile, a disciplined schedule+regularization sweep improved quality without sacrificing throughput.
+
+Tested changes:
+
+```bash
+export WARMUP_STEPS=120
+export DROPOUT_P=0.20
+```
+
+with all other high-throughput settings unchanged:
+- `MODEL_DIM=512`
+- `TRAIN_BATCH_TOKENS=153600`
+- `MICRO_BATCH_TOKENS=153600`
+- `MULTILAYER_ACTIVATION_CHECKPOINT_MODE=encoder_only`
+- `MINI_DEPTH_REFINE_BLOCKS=3`
+- `ATTN_OUTPUT_MODE=einsum_fused`
+- `SDPA_BACKEND=flash`
+
+#### Results
+
+| Metric | Prior 153600 baseline | Warmup 120 + Dropout 0.20 | Δ |
+|--------|------------------------|----------------------------|---|
+| Step time | ~209ms | **~208–210ms** | Same |
+| Steps in 600s | 2422 | **2555** | **+133** |
+| Best val_bpb | 1.4544 | **1.4525** | **-0.0019** |
+| Peak reserved VRAM | ~10.92 GiB | **~11.42 GiB** | +0.5 GiB |
+
+#### val_bpb progression
+
+```text
+step:200   val_bpb: 2.0555
+step:400   val_bpb: 1.7073
+step:800   val_bpb: 1.6035
+step:1200  val_bpb: 1.5635
+step:1600  val_bpb: 1.5418
+step:2000  val_bpb: 1.5235
+step:2400  val_bpb: 1.5130
+step:2555  val_bpb: 1.4525  ← FINAL BEST
+```
+
+#### Interpretation
+
+This was a real win, not just noise:
+1. **Longer warmup helped the faster 5090 regime** — 40 steps was likely too short given the much larger number of updates completed in 600 seconds.
+2. **Dropout 0.20 outperformed 0.30** on 5090 while still preserving enough regularization.
+3. **Throughput remained excellent** — no meaningful step-time regression despite the better final bpb.
+
+This suggests the 5090 path is still **optimization-limited**, not purely hardware-limited.
+
+### 5090 Memory-for-Speed Ladder
+
+The next observation from 5090 testing was that **VRAM headroom can still be traded for additional speed**, but the trade must be applied to **checkpoint/recompute policy**, not larger batch size.
+
+#### Evidence
+
+With more aggressive checkpoint settings, the run showed:
+- **steady-state dt ~188–191ms**
+- **reserved VRAM ~13.08 GiB**
+- **peak allocated VRAM ~12.62 GiB**
+
+This is roughly an **8–10% step-time improvement** versus the ~208–210ms disciplined quality run, while still using far less than the full 31.37 GiB available on the 5090.
+
+#### Recommended ladder
+
+1. `MULTILAYER_ACTIVATION_CHECKPOINT_MODE=minimal`
+2. `MLP_RECOMPUTE=0`
+3. `MLP_MEMORY_MODE=off`
+
+#### Key lesson
+
+For 5090, extra VRAM is useful when spent on **removing memory-saving overhead**, but **not** when spent on larger batch sizes. Batch scaling to 393216 harmed throughput badly; checkpoint/recompute reductions improved it.
