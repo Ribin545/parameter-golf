@@ -677,4 +677,24 @@ The 5090 achieves **1.4544 val_bpb** vs the 3090's **1.5390** — a **5.5% absol
 2. **2.1× more training steps** (2422 vs ~1150) — more gradient updates in fixed time
 3. **Same VRAM footprint** (~10.9 GiB) — architecture scales perfectly with hardware
 
-The 5090 still has ~20 GiB of unused VRAM headroom, suggesting batch size can be increased further for even better convergence.
+### 5090 Batch Scaling Test (393216 tokens)
+
+After the 153600-token baseline, batch was increased to **393216 tokens/step** to test VRAM limits.
+
+| Metric | 153600 tokens | 393216 tokens | Δ |
+|--------|---------------|---------------|---|
+| Step time | ~209ms | **~208ms** | Similar |
+| Steps in 600s | 2422 | **2424** | Similar |
+| Best val_bpb | 1.4544 | **1.4545** | Identical |
+| Peak VRAM | ~10.92 GiB | ~10.92 GiB | Same |
+
+**val_bpb progression (393216 batch):**
+```
+step:200   val_bpb: 2.0737
+step:800   val_bpb: 1.6080
+step:1600  val_bpb: 1.5457
+step:2400  val_bpb: 1.5155
+step:2424  val_bpb: 1.4545  ← FINAL BEST
+```
+
+**Analysis:** Increasing batch from 153600 to 393216 produced **no measurable improvement** in final val_bpb (1.4545 vs 1.4544). The 5090's training appears **compute-bound rather than sample-efficiency bound** in the 10-minute wallclock — step time did not decrease despite larger batch, suggesting the model was already saturating the GPU. The 153600 batch remains the efficient sweet spot.
