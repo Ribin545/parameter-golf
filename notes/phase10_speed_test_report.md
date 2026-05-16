@@ -826,3 +826,44 @@ This is the strongest 5090 result so far and establishes a clear lesson:
 4. The 5090 still fits this aggressive policy comfortably enough to run stably, even with reserved VRAM around **19.35 GiB / 31.37 GiB**.
 
 This makes full checkpoint removal the current best-known 5090 wallclock-quality profile in Phase 10.
+
+### Fixed 524288-Token Regime: 2-Minute Discrimination Sweep on 3090
+
+To compare more fairly against the OpenAI naive baseline token budget, a short sweep was run on the 3090-side multilayer winner family with:
+
+```bash
+TRAIN_BATCH_TOKENS=524288
+MICRO_BATCH_TOKENS=153600   # auto-clamped to 102400 on 24GB
+VAL_LOSS_EVERY=0            # disable in-training eval overhead
+MAX_WALLCLOCK_SECONDS=120
+```
+
+Common settings:
+- `MODEL_TYPE=multilayer`
+- `NUM_LAYERS=5`
+- `MODEL_DIM=512`
+- `NUM_HEADS=8`
+- `NUM_KV_HEADS=4`
+- `MLP_MULT=2`
+- `RECURRENCE_STEPS=2`
+- `MULTILAYER_ACTIVATION_CHECKPOINT=0`
+- `MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off`
+- `MLP_RECOMPUTE=0`
+- `MLP_MEMORY_MODE=off`
+- `ATTN_MEMORY_MODE=off`
+- `ATTN_OUTPUT_MODE=einsum_fused`
+- `SDPA_BACKEND=flash`
+
+Candidate sweep:
+
+| Candidate | Warmup | Matrix LR | Scalar/Lora/Control LR | Dropout | FP val_bpb (2 min) |
+|-----------|--------|-----------|-------------------------|---------|--------------------|
+| A | 120 | 0.08 | 0.015 | 0.20 | **3.538956** |
+| B | 200 | 0.06 | 0.012 | 0.20 | **3.538956** |
+| C | 200 | 0.06 | 0.012 | 0.15 | **3.538956** |
+
+#### Interpretation
+
+These 2-minute runs were effectively a **tie**. All candidates only reached about **58 steps in 120s** with steady-state step time around **1.68s**, so the schedule/dropout differences did not have enough wallclock time to separate.
+
+The lesson is that in the fixed-524288-token regime on 3090, the dominant bottleneck is still **step/update cost**, not fine-grained schedule choice. A longer run is required for meaningful discrimination, and Candidate A was chosen as the simplest tie-winner for follow-up 10-minute testing.
