@@ -21,8 +21,17 @@ echo ""
 
 # --- Pre-flight: NVIDIA Driver + CUDA Toolkit check ---
 echo "[preflight] Checking NVIDIA driver..."
-if command -v nvidia-smi &> /dev/null; then
-    DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | tr -d '[:space:]')
+# Search for nvidia-smi in common locations (WSL often puts it in Windows paths)
+NVIDIA_SMI=""
+for loc in nvidia-smi /usr/lib/wsl/lib/nvidia-smi.exe /mnt/c/Windows/System32/nvidia-smi.exe; do
+    if command -v "$loc" &> /dev/null || [ -x "$loc" ]; then
+        NVIDIA_SMI="$loc"
+        break
+    fi
+done
+
+if [ -n "$NVIDIA_SMI" ]; then
+    DRIVER_VER=$("$NVIDIA_SMI" --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1 | tr -d '[:space:]')
     echo "[preflight] NVIDIA driver detected: $DRIVER_VER"
 else
     echo "[ERROR] nvidia-smi not found. NVIDIA driver is required."
@@ -45,7 +54,17 @@ else
         sudo dpkg -i /tmp/cuda-keyring.deb
         sudo apt-get update -qq
         sudo apt-get install -y -qq cuda-toolkit-13-0
-        if command -v nvcc &> /dev/null; then
+        # Make CUDA available for rest of script (APPEND to avoid shadowing core utils)
+        export PATH="$PATH:/usr/local/cuda-13.0/bin"
+        export LD_LIBRARY_PATH="/usr/local/cuda-13.0/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        # Also add to shell profile so nvcc is available in future sessions
+        # Use append (not prepend) so CUDA does not shadow system utilities like tail, ls, etc.
+        if ! grep -q "/usr/local/cuda-13.0/bin" "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$PATH:/usr/local/cuda-13.0/bin"' >> "$HOME/.bashrc"
+            echo 'export LD_LIBRARY_PATH="/usr/local/cuda-13.0/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"' >> "$HOME/.bashrc"
+            echo "[preflight] Added CUDA 13.0 to ~/.bashrc for future sessions."
+        fi
+        if command -v nvcc &> /dev/null || [ -x /usr/local/cuda-13.0/bin/nvcc ]; then
             echo "[preflight] CUDA 13.0 toolkit installed successfully."
         else
             echo "[ERROR] CUDA toolkit installation failed."
