@@ -113,6 +113,11 @@ class Hyperparameters:
     val_batch_size = int(os.environ.get("VAL_BATCH_SIZE", 65_536))
     val_loss_every = int(os.environ.get("VAL_LOSS_EVERY", 100))
     train_log_every = int(os.environ.get("TRAIN_LOG_EVERY", 1))
+    # Eval coverage controls:
+    # - VAL_EVAL_MAX_STEPS applies to intermediate validation passes
+    # - FINAL_VAL_EVAL_MAX_STEPS applies to the last validation pass; <=0 means full split
+    val_eval_max_steps = int(os.environ.get("VAL_EVAL_MAX_STEPS", "50"))
+    final_val_eval_max_steps = int(os.environ.get("FINAL_VAL_EVAL_MAX_STEPS", "0"))
 
     iterations = int(os.environ.get("ITERATIONS", 500))
     warmup_steps = int(os.environ.get("WARMUP_STEPS", 16))
@@ -736,9 +741,11 @@ def main() -> None:
             log0(f"[vram_eval] post_swap step={step} alloc_gib={vram_post_swap['alloc_gib']:.2f} resv_gib={vram_post_swap['resv_gib']:.2f} peak_alloc_gib={vram_post_swap['peak_alloc_gib']:.2f} peak_resv_gib={vram_post_swap['peak_resv_gib']:.2f}")
 
             eval_stride = args.quant_eval_stride if last_step else args.train_seq_len
+            eval_max_steps = args.final_val_eval_max_steps if last_step else args.val_eval_max_steps
+            eval_max_steps = None if eval_max_steps <= 0 else eval_max_steps
             val_loss, val_bpb = eval_val(args, model, rank, world_size, device, grad_accum_steps,
                                          val_tokens, base_bytes_lut, has_leading_space_lut,
-                                         is_boundary_token_lut, max_steps=50, stride=eval_stride,
+                                         is_boundary_token_lut, max_steps=eval_max_steps, stride=eval_stride,
                                          ttt_lr=args.ttt_lr)
 
             # Restore trained weights by swapping .data references back
