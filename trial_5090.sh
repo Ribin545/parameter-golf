@@ -125,7 +125,7 @@ export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off
 # Static mini-depth: step 1 only runs last K blocks (K=3 is the sweet spot)
 # ~541ms step time (15% faster), val_bpb 1.5298 (better than 1.5390)
 export MINI_DEPTH_STATIC=1
-export MINI_DEPTH_REFINE_BLOCKS=3
+export MINI_DEPTH_REFINE_BLOCKS=4
 
 # Aggressive speed trade: spend VRAM to remove recompute overhead
 export MLP_RECOMPUTE=0
@@ -152,7 +152,7 @@ export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 export SCHEDULE_FREE=1
 export WARMUP_STEPS=120
 export TRAIN_LOG_EVERY=50
-export VAL_LOSS_EVERY=200
+export VAL_LOSS_EVERY=400
 export QUANT_EVAL=1
 export SAVE_BEST_CHECKPOINT=1
 export SAVE_BEST_INT8=1
