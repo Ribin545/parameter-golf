@@ -144,14 +144,14 @@ export TARGET_GRAD_NORM=0.8
 # =============================================================================
 # Regularization
 # =============================================================================
-export DROPOUT_P=0.30       # Phase 9b: -0.10 from baseline, recover gradient signal
+export DROPOUT_P=0.20       # 5090 quality test: slightly lower regularization than 0.30
 export LABEL_SMOOTHING=0.08  # Phase 9b: -0.07 from baseline, sharper targets
 
 # =============================================================================
 # Scheduler + stopping — SCHEDULE_FREE=1 (locked: -4.8% val_bpb)
 # =============================================================================
 export SCHEDULE_FREE=1
-export WARMUP_STEPS=40
+export WARMUP_STEPS=120
 export TRAIN_LOG_EVERY=50
 export VAL_LOSS_EVERY=200
 export QUANT_EVAL=1
