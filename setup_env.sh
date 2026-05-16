@@ -70,7 +70,6 @@ echo "[info] Detected CUDA version: $CUDA_VER"
 case "$CUDA_VER" in
     13.*)
         echo "[install] CUDA 13.0 detected → PyTorch 2.11.0+cu130"
-        python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130 --no-deps 2>/dev/null || \
         python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
         ;;
     12.8|12.6)
