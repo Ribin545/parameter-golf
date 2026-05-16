@@ -772,3 +772,57 @@ This is roughly an **8–10% step-time improvement** versus the ~208–210ms dis
 #### Key lesson
 
 For 5090, extra VRAM is useful when spent on **removing memory-saving overhead**, but **not** when spent on larger batch sizes. Batch scaling to 393216 harmed throughput badly; checkpoint/recompute reductions improved it.
+
+### 5090 Max-Speed Policy Win: full checkpoint removal
+
+After the memory-for-speed ladder was pushed to its most aggressive tested point, the 5090 achieved a much stronger result than the earlier 2555-step quality-tuned run.
+
+Tested settings:
+
+```bash
+export MULTILAYER_ACTIVATION_CHECKPOINT=0
+export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off
+export MLP_RECOMPUTE=0
+export MLP_MEMORY_MODE=off
+export ATTN_MEMORY_MODE=off
+export WARMUP_STEPS=120
+export DROPOUT_P=0.20
+export TRAIN_BATCH_TOKENS=153600
+export MICRO_BATCH_TOKENS=153600
+```
+
+#### Results
+
+| Metric | Warmup 120 + Dropout 0.20 | Full checkpoint removal | Δ |
+|--------|----------------------------|--------------------------|---|
+| Step time | ~208–210ms | **~162–164ms** | **~22% faster** |
+| Steps in 600s | 2555 | **3161** | **+606** |
+| Best val_bpb | 1.4525 | **1.4389** | **-0.0136** |
+| Reserved VRAM | ~11.42 GiB | **~19.35 GiB** | +7.9 GiB |
+| Peak alloc VRAM | ~10.77 GiB | **~19.15 GiB** | +8.4 GiB |
+
+#### val_bpb progression
+
+```text
+step:200   val_bpb: 2.0490
+step:400   val_bpb: 1.7065
+step:800   val_bpb: 1.6030
+step:1200  val_bpb: 1.5587
+step:1600  val_bpb: 1.5412
+step:2000  val_bpb: 1.5234
+step:2400  val_bpb: 1.5128
+step:2800  val_bpb: 1.4988
+step:3000  val_bpb: 1.4948
+step:3161  val_bpb: 1.4389  ← FINAL BEST
+```
+
+#### Interpretation
+
+This is the strongest 5090 result so far and establishes a clear lesson:
+
+1. **VRAM spent on removing checkpoint/recompute overhead is highly productive on 5090.**
+2. **The 153600 batch remains the right batch size**; the big win came from speed policy, not larger batch.
+3. **More updates in the same 600s directly translated into better final bpb** here: 2555 → 3161 steps and 1.4525 → 1.4389.
+4. The 5090 still fits this aggressive policy comfortably enough to run stably, even with reserved VRAM around **19.35 GiB / 31.37 GiB**.
+
+This makes full checkpoint removal the current best-known 5090 wallclock-quality profile in Phase 10.
