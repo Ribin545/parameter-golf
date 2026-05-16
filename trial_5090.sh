@@ -193,7 +193,7 @@ run_training() {
     export MAX_WALLCLOCK_SECONDS=$wallclock
     export ITERATIONS=$iters
 
-    torchrun --standalone --nproc_per_node=1 train_gpt.py
+    python3 -u train_gpt.py
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
