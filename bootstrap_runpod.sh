@@ -14,7 +14,7 @@ REPO_DIR="/workspace/parameter-golf"
 REPO_URL="https://github.com/Ribin545/parameter-golf.git"
 
 echo "=========================================="
-echo " RunPod Bootstrap — Parameter Golf AB Test"
+echo " RunPod Bootstrap — Parameter Golf Best-Known Launcher"
 echo "=========================================="
 
 # --- Step 1: Clone or pull repo ---
@@ -71,7 +71,7 @@ if echo "$GPU_NAME" | grep -qi "H100"; then
     chmod +x trial_h100.sh
     ./trial_h100.sh
 else
-    echo "[bootstrap] Launching 5090 throughput training..."
+    echo "[bootstrap] Launching best-known 5090/RunPod multilayer recipe via trial_5090.sh ..."
     chmod +x trial_5090.sh
     ./trial_5090.sh
 fi
@@ -79,5 +79,5 @@ fi
 echo ""
 echo "=========================================="
 echo " Bootstrap complete."
-echo " Logs: $REPO_DIR/ab_logs/"
+echo " Repo: $REPO_DIR"
 echo "=========================================="

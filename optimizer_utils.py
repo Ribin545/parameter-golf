@@ -69,6 +69,10 @@ class Muon(torch.optim.Optimizer):
             params,
             dict(lr=lr, momentum=momentum, backend_steps=backend_steps, nesterov=nesterov),
         )
+        # Persistent flat buffer cache per param-group to avoid reallocating a large
+        # temporary tensor every optimizer step. Reuse reduces allocator churn and
+        # may help long-run dt creep from fragmentation.
+        self._flat_buffer_cache: dict[int, tuple[torch.Tensor, int]] = {}
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -91,7 +95,18 @@ class Muon(torch.optim.Optimizer):
             nesterov = group["nesterov"]
 
             total_params = sum(int(p.numel()) for p in params)
-            updates_flat = torch.zeros(total_params, device=params[0].device, dtype=torch.bfloat16)
+            cache_key = id(group)
+            cached = self._flat_buffer_cache.get(cache_key)
+            if (
+                cached is None
+                or cached[1] != total_params
+                or cached[0].device != params[0].device
+            ):
+                updates_flat = torch.zeros(total_params, device=params[0].device, dtype=torch.bfloat16)
+                self._flat_buffer_cache[cache_key] = (updates_flat, total_params)
+            else:
+                updates_flat = cached[0]
+                updates_flat.zero_()
 
             curr = 0
             for i, p in enumerate(params):
