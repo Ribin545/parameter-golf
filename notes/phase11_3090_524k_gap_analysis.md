@@ -9,13 +9,14 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 
 | Config | Layers | Fixes | Steps | Step time | FP val_bpb | INT8 val_bpb | Gap to Baseline |
 |--------|--------|-------|-------|-----------|------------|--------------|-----------------|
-| **Baseline (9L simple)** | 9 | none | 361 | ~1.67s | **1.6044** | 1.6044 | — |
+| Baseline (9L simple) | 9 | none | 361 | ~1.67s | 1.6044 | 1.6044 | — |
 | B_aggrLR (5L) | 5 | none | 357 | ~1.67s | 1.7149 | 1.7154 | +0.111 |
 | D_6layer (6L) | 6 | none | 306 | ~1.86s | 1.6558 | 1.6571 | +0.051 |
 | E_6layer_aggrLR (6L) | 6 | none | 306 | ~1.88s | 1.7078 | 1.7092 | +0.103 |
 | F_6layer_ckpt (6L) | 6 | encoder_only ckpt | 252 | ~2.35s | 1.7555 | 1.7553 | +0.151 |
 | **G_clean_aligned (6L)** | 6 | ALL 6 FIXES | 305 | ~1.88s | **1.6154** | 1.6163 | **+0.011** |
 | **H_audit_fixed_clean (6L)** | 6 | G + bigram wiring + true baseline proj | **316** | ~1.84s | **1.6156** | 1.6160 | **+0.011** |
+| **I_refine2_clean (6L)** | 6 | H + `MINI_DEPTH_REFINE_BLOCKS=2` | **353** | **~1.64s** | **1.5864** | 1.5871 | **-0.018** |
 
 ## Key Findings
 
@@ -104,12 +105,18 @@ Conclusions:
 - encoder_only checkpointing (F): 2.35s/step (+26% overhead)
 - 252 steps vs 306 = fewer updates → worse final quality
 
-### 5. Step time is still the fundamental constraint
+### 5. Step time was the fundamental constraint — and `refine_blocks=2` solved it
 - Simple transformer: 1.67s/step — lean, single pass
 - Multilayer 6L audit-fixed: 1.84s/step — recurrence + skip overhead
+- Multilayer 6L `refine_blocks=2`: **1.64s/step** — now slightly *faster* than baseline steady-state dt
 - Multilayer 6L + ckpt: 2.35s/step — checkpointing adds more overhead
 
-**316 steps vs 361 = 45 fewer optimizer updates** — that's the remaining gap.
+This removed the last step-count bottleneck:
+- H_audit_fixed_clean: 316 steps
+- I_refine2_clean: **353 steps**
+- Baseline: 361 steps
+
+We no longer need to fully match baseline steps if quality stays higher per step.
 
 ### 6. Training loss progression (step 200, actual = logged/5)
 - Baseline: **2.87**
@@ -119,49 +126,70 @@ Conclusions:
 With correct grad scaling + no dropout + hard CE, per-step convergence is now **on par with baseline**.
 
 ### 7. Scaling insight
-- **3090** (our best): 1.6156 vs baseline 1.6044 = **+0.011 gap**
-- **5090** (our best): 1.4389 vs baseline ~1.45 = **-0.011 AHEAD**
+- **3090** (new best): **1.5864 vs baseline 1.6044 = -0.018 AHEAD**
+- **5090** (previous best): 1.4389 vs baseline ~1.45 = **-0.011 AHEAD**
 
-The multilayer architecture is **hardware-scalable**. On 3090 it's slightly behind; on 5090 it's ahead.
+The multilayer architecture is now proven on **both** 3090 and 5090.
 
 ---
 
-## Remaining Gap: +0.011 val_bpb
+## Final winning result
 
-To close this, we need to either:
+`I_refine2_clean` is the new best-known 3090 configuration in this track.
 
-### Option A: Reduce step time on 6-layer
-- Currently 1.84s vs baseline 1.67s → need **~9% speedup**
+### Winning metrics
+- **FP val_bpb: 1.586353**
+- **INT8 val_bpb: 1.587062**
+- **353 steps in 10 minutes**
+- **Steady-state dt: ~1.64s**
+- **Margin vs baseline: -0.0180 val_bpb**
+
+### Why it wins
+It combines all earlier fixes with one final speed optimization:
+1. Correct grad accumulation scaling (`ACCUM_BACKWARD_SCALE=sum`)
+2. Hard CE objective (`LABEL_SMOOTHING=0`, `DROPOUT_P=0`, `LOGIT_SOFTCAP=30`)
+3. No validation leakage (`LM_BIAS_INIT=0`)
+4. No dead overhead (`BIGRAM_HASH_ENABLED=0`, `SHELL_CENTERING_ENABLED=0`)
+5. True faster attention output path (`ATTN_OUTPUT_MODE=baseline`)
+6. No hot-path EMA snapshots (`EMA_UPDATE_EVERY=0`)
+7. **Static mini-depth trimmed from 3 to 2 refine blocks**
+
+This keeps the 6-layer / 2-step recurrence architecture intact while cutting enough work from the refine step to recover nearly all lost step count.
+
+---
+
+## If we want to go even further
+
+Potential next gains:
+
+### Option A: Push step time lower still
+- Current winner is ~1.64s steady-state.
 - Potential paths:
-  1. **Reduce refine blocks** from 3 to 2 (`MINI_DEPTH_REFINE_BLOCKS=2`) — microbench shows ~10% speedup.
-  2. **Compile full model** with `torch.compile(base_model, dynamic=False, fullgraph=True)` instead of just `forward_logits`.
-  3. **Attention every 2** (`RECURRENT_ATTN_EVERY=2`) — ~19% faster but quality risk.
-  4. **Profile** where time goes: attention, MLP, or skip connections
+  1. **Compile full model** with `torch.compile(base_model, dynamic=False, fullgraph=True)` instead of just `forward_logits`.
+  2. **Attention every 2** (`RECURRENT_ATTN_EVERY=2`) — ~19% faster but quality risk.
+  3. **Profile** where time goes: attention, MLP, or skip connections
 
-### Option B: Increase per-step quality
-- 6-layer needs to reach baseline's per-step convergence
+### Option B: Increase per-step quality further
 - Potential paths:
   1. **QKV LoRA** instead of Q-only — more attention capacity
   2. **7 or 8 layers** — if step time stays under ~1.95s
   3. **Better initialization** — the baseline may have better weight init
-  4. **Remove bigram hash / shell centering** — overhead without proven benefit at 10-min scale
+  4. **Re-test shell centering / bigram hash only if they improve quality enough to justify cost**
 
-### Option C: Hybrid approach
-- Use the baseline architecture but add our best features:
-  1. Simple transformer + LoRA
-  2. Simple transformer + recurrence
-  3. Simple transformer + bigram hash
+### Option C: Quality-risk/high-speed route
+- `RECURRENT_ATTN_EVERY=2` already benchmarks ~19% faster.
+- It should be tested only if we want a more aggressive speed/quality tradeoff than `refine_blocks=2`.
 
 ---
 
 ## Recommended Next Experiments
 
-### Priority 1: `MINI_DEPTH_REFINE_BLOCKS=2` 10-minute quality test
+### Priority 1: Lock in `I_refine2_clean` as best-known 3090 config
 ```bash
 bash run_ten_min_refine2.sh
 ```
 
-This is the highest-confidence speed path: microbench shows **~10% faster**, which is enough to close the remaining step-count gap if quality holds.
+This has already won and should be treated as the new reference.
 
 ### Priority 2: Full-model compile on 6-layer
 ```bash
@@ -200,7 +228,7 @@ Cheap quality test.
 
 | Experiment | Speed Risk | Quality Potential | Effort | Priority |
 |------------|-----------|-------------------|--------|----------|
-| MINI_DEPTH_REFINE_BLOCKS=2 | Low | Medium | Low | **1** |
+| **Keep `I_refine2_clean` as reference** | Low | Proven | Low | **1** |
 | Full-model compile | Low | Medium | Low | **2** |
 | RECURRENT_ATTN_EVERY=2 | Medium | Medium | Low | 3 |
 | NUM_LAYERS=7 | Medium | High | Low | 4 |
@@ -219,17 +247,27 @@ Cheap quality test.
 - `bench_phase11_audit.py` — focused benchmark for bigram + attention output path audit
 - `bench_phase11_train_split.py` — train-loop timing split: data/forward/backward/optimizer
 - `run_ten_min_refine2.sh` — candidate 10-minute run with `MINI_DEPTH_REFINE_BLOCKS=2`
+- `best_known_3090.sh` — final best-known winning 3090 configuration
 
 ---
 
 ## Verdict
 
-**Gap closed from +0.051 to +0.011** through config + implementation fixes. The remaining gap is almost entirely **step count** (316 vs 361 steps).
+**Phase 11 succeeded.**
 
-The multilayer architecture now **converges per-step as fast as the baseline** (~2.90 loss at step 200). The only disadvantage is **~10% slower steps** (1.84s vs 1.67s).
+We started at:
+- D_6layer: **1.6558 val_bpb**
 
-To beat the baseline, we need **~9% step time reduction** OR **better per-step quality at the same 1.84s step time**.
+We ended at:
+- I_refine2_clean: **1.5864 val_bpb**
 
-On 5090, this same architecture already wins by ~0.011 val_bpb. The path forward is:
-1. **Speed optimization** for 3090 (full compile, reduce recurrence)
-2. **Deploy on 5090** where it already dominates
+That is a total gain of:
+- **0.0694 val_bpb** over the original 6-layer config
+- **0.0180 val_bpb better than the 9-layer baseline**
+
+The biggest lessons were:
+1. Most of the early gap was **config mismatch**, not architecture.
+2. Then two **real hot-path bugs** were hiding extra compute.
+3. Finally, **trimming refine-step depth from 3 to 2** provided the exact speedup needed to turn a near-tie into a clear win.
+
+At this point, `I_refine2_clean` should be treated as the best-known 3090 recipe for this project state.
