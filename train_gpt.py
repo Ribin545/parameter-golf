@@ -204,6 +204,7 @@ class Hyperparameters:
     quant_eval_max_steps = int(os.environ.get("QUANT_EVAL_MAX_STEPS", "50"))
     quant_eval_stride = int(os.environ.get("QUANT_EVAL_STRIDE", "64"))
     official_eval_mode = bool(int(os.environ.get("OFFICIAL_EVAL_MODE", "0")))
+    ema_update_every = int(os.environ.get("EMA_UPDATE_EVERY", "100"))
 
     # Loss filter
     loss_filter_enabled = bool(int(os.environ.get("LOSS_FILTER_ENABLED", "0")))
@@ -957,10 +958,10 @@ def main() -> None:
             )
             optimizer_adam.step()
 
-        # EMA removed from hot path — only needed at export time.
-        # Compute lazily: update model_ema snapshot once every 100 steps
-        # instead of every single step.
-        if step % 100 == 0:
+        # EMA/snapshot update. This copy is timed in dt and causes visible
+        # spikes at update steps (100/200/300). Set EMA_UPDATE_EVERY=0 to
+        # disable hot-path snapshots and export current weights at the end.
+        if args.ema_update_every > 0 and step % args.ema_update_every == 0:
             for n, p in model.named_parameters():
                 ema_n = n.replace("module.", "")
                 if ema_n in model_ema:
@@ -992,6 +993,9 @@ def main() -> None:
     if use_best:
         log0(f"[final] Export source: BEST checkpoint step={best_step} best_val_loss={best_val_loss:.4f} best_val_bpb={best_val_bpb:.4f}")
         export_ema = best_ema
+    elif args.ema_update_every <= 0:
+        log0(f"[final] Export source: CURRENT weights (EMA_UPDATE_EVERY=0)")
+        export_ema = {n.replace("module.", ""): p.detach() for n, p in model.named_parameters()}
     else:
         log0(f"[final] Export source: FINAL EMA weights")
         export_ema = model_ema

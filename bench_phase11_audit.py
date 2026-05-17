@@ -26,7 +26,10 @@ def reset_model_multilayer_globals() -> None:
     mm._ATTN_OUTPUT_MODE = None
 
 
-def run_case(name: str, *, bigram: bool, attn_output_mode: str, compile_forward: bool = True) -> dict:
+def run_case(name: str, *, bigram: bool, attn_output_mode: str,
+             fused_mlp: bool = True, refine_blocks: int = 3,
+             recurrent_attn_every: int = 1,
+             compile_forward: bool = True) -> dict:
     os.environ.update({
         "BIGRAM_HASH_ENABLED": "1" if bigram else "0",
         "ATTN_OUTPUT_MODE": attn_output_mode,
@@ -35,7 +38,8 @@ def run_case(name: str, *, bigram: bool, attn_output_mode: str, compile_forward:
         "ATTN_MEMORY_MODE": "off",
         "MULTILAYER_ACTIVATION_CHECKPOINT": "0",
         "MINI_DEPTH_STATIC": "1",
-        "MINI_DEPTH_REFINE_BLOCKS": "3",
+        "MINI_DEPTH_REFINE_BLOCKS": str(refine_blocks),
+        "FUSED_MLP_ENABLED": "1" if fused_mlp else "0",
     })
     reset_model_multilayer_globals()
     from model_multilayer import GPTMultiLayer
@@ -60,7 +64,7 @@ def run_case(name: str, *, bigram: bool, attn_output_mode: str, compile_forward:
         bigram_hash_size=4096,
         bigram_hash_scale=0.05,
         lora_rank=8,
-        recurrent_attn_every=1,
+        recurrent_attn_every=recurrent_attn_every,
         shell_centering_enabled=False,
         label_smoothing=0.0,
         z_loss_lambda=0.0,
@@ -98,6 +102,9 @@ def run_case(name: str, *, bigram: bool, attn_output_mode: str, compile_forward:
         "name": name,
         "bigram": bigram,
         "attn_output_mode": attn_output_mode,
+        "fused_mlp": fused_mlp,
+        "refine_blocks": refine_blocks,
+        "recurrent_attn_every": recurrent_attn_every,
         "params": sum(p.numel() for p in model.parameters()),
         "median_ms": statistics.median(times),
         "mean_ms": statistics.mean(times),
@@ -120,14 +127,24 @@ def main() -> None:
     torch.set_float32_matmul_precision("high")
 
     cases = [
-        ("clean_baseline_proj_no_bigram", False, "baseline"),
-        ("clean_einsum_no_bigram", False, "einsum_fused"),
-        ("old_einsum_with_bigram", True, "einsum_fused"),
+        ("clean_baseline_proj_no_bigram_fused_mlp", False, "baseline", True),
+        ("clean_baseline_proj_no_bigram_native_mlp", False, "baseline", False),
+        ("clean_einsum_no_bigram_fused_mlp", False, "einsum_fused", True),
+        ("old_einsum_with_bigram_fused_mlp", True, "einsum_fused", True),
+        ("clean_refine_blocks2", False, "baseline", True),
+        ("clean_attn_every2", False, "baseline", True),
     ]
     results = []
-    for name, bigram, mode in cases:
+    for name, bigram, mode, fused_mlp in cases:
         print(f"\n=== {name} ===", flush=True)
-        res = run_case(name, bigram=bigram, attn_output_mode=mode)
+        res = run_case(
+            name,
+            bigram=bigram,
+            attn_output_mode=mode,
+            fused_mlp=fused_mlp,
+            refine_blocks=2 if "refine_blocks2" in name else 3,
+            recurrent_attn_every=2 if "attn_every2" in name else 1,
+        )
         results.append(res)
         print(res, flush=True)
 

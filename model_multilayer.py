@@ -37,6 +37,8 @@ try:
 except Exception:
     triton_fused_relu2 = None
 
+_FUSED_MLP_ENABLED = os.environ.get("FUSED_MLP_ENABLED", "1") != "0"
+
 _MLP_MEMORY_MODE: str | None = None
 _ATTN_MEMORY_MODE: str | None = None
 _SDPA_BACKEND_MODE: str | None = None
@@ -370,7 +372,7 @@ class MLP(nn.Module):
         self.proj._zero_init = True
 
     def _forward_impl(self, x: Tensor) -> Tensor:
-        if triton_fused_relu2 is not None and x.is_cuda:
+        if _FUSED_MLP_ENABLED and triton_fused_relu2 is not None and x.is_cuda:
             x = triton_fused_relu2(x, self.fc.weight.t())
             return self.proj(x)
         x = torch.relu(self.fc(x))

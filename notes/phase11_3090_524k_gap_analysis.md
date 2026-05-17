@@ -63,6 +63,37 @@ Real 10-minute run after audit fixes:
 
 Conclusion: this audit recovered **~3.6% more optimizer steps** with no meaningful quality regression.
 
+### 2c. DT drift audit: not EMA/optimizer, mostly model compute
+
+User-observed dt drift (~1800ms early → ~1847ms later) was investigated with:
+- `EMA_UPDATE_EVERY=0`: disabled hot-path EMA snapshots.
+- `bench_phase11_train_split.py`: split data/forward/backward/optimizer timing.
+
+Findings:
+- EMA snapshots were **not** the main cause; drift persisted with EMA disabled.
+- Optimizer time is small: ~15–25ms/step.
+- Data loading is small/moderate: ~35–45ms/step after warmup.
+- Most time is model compute:
+  - forward: ~529ms → ~533ms
+  - backward: ~1223ms → ~1240ms
+
+So dt stabilization is mostly a **model hot-path** problem, not optimizer or logging.
+
+Expanded microbench (`bench_phase11_audit.py`):
+
+| Variant | Median step | Delta vs clean |
+|---------|-------------|----------------|
+| clean baseline projection + no bigram + fused MLP | **348.48 ms** | — |
+| native torch MLP instead of Triton fused | 349.43 ms | +0.27% |
+| einsum attention output | 355.13 ms | +1.91% |
+| `MINI_DEPTH_REFINE_BLOCKS=2` | **313.67 ms** | **-9.99%** |
+| `RECURRENT_ATTN_EVERY=2` | **281.53 ms** | **-19.21%** |
+
+Conclusions:
+- Current Triton MLP is only ~0.3% faster than native torch in this config; not a big lever.
+- `MINI_DEPTH_REFINE_BLOCKS=2` is the safest speed lever: ~10% faster while preserving attention on both recurrence steps.
+- `RECURRENT_ATTN_EVERY=2` is much faster (~19%) but higher quality risk because step 1 becomes MLP-only.
+
 ### 3. Aggressive LR is a trap for 6 layers
 - 6-layer standard LR (D): 1.6558
 - 6-layer aggressive LR (E): 1.7078 — **worse!**
@@ -102,9 +133,9 @@ To close this, we need to either:
 ### Option A: Reduce step time on 6-layer
 - Currently 1.84s vs baseline 1.67s → need **~9% speedup**
 - Potential paths:
-  1. **Compile full model** with `torch.compile(base_model, dynamic=False, fullgraph=True)` instead of just `forward_logits`
-  2. **Reduce recurrence to 1 step** (currently 2 steps)
-  3. **Reduce refine blocks** from 3 to 2 (MINI_DEPTH_REFINE_BLOCKS=2)
+  1. **Reduce refine blocks** from 3 to 2 (`MINI_DEPTH_REFINE_BLOCKS=2`) — microbench shows ~10% speedup.
+  2. **Compile full model** with `torch.compile(base_model, dynamic=False, fullgraph=True)` instead of just `forward_logits`.
+  3. **Attention every 2** (`RECURRENT_ATTN_EVERY=2`) — ~19% faster but quality risk.
   4. **Profile** where time goes: attention, MLP, or skip connections
 
 ### Option B: Increase per-step quality
@@ -125,7 +156,14 @@ To close this, we need to either:
 
 ## Recommended Next Experiments
 
-### Priority 1: Full-model compile on 6-layer
+### Priority 1: `MINI_DEPTH_REFINE_BLOCKS=2` 10-minute quality test
+```bash
+bash run_ten_min_refine2.sh
+```
+
+This is the highest-confidence speed path: microbench shows **~10% faster**, which is enough to close the remaining step-count gap if quality holds.
+
+### Priority 2: Full-model compile on 6-layer
 ```bash
 export DISABLE_COMPILE=0
 export TORCH_COMPILE_MODE=default
@@ -134,21 +172,21 @@ export TORCH_COMPILE_MODE=default
 
 This is the highest-potential, lowest-risk path. May cut 5–15% step time.
 
-### Priority 2: Reduce recurrence to 1 step
+### Priority 3: Attention every 2
 ```bash
-export RECURRENCE_STEPS=1
+export RECURRENT_ATTN_EVERY=2
 ```
 
-Simple test: does single-step recurrence still achieve reasonable quality? If yes, step time drops significantly.
+High speed potential (~19%) but quality risk because refine step becomes MLP-only.
 
-### Priority 3: 7-layer test
+### Priority 4: 7-layer test
 ```bash
 export NUM_LAYERS=7
 ```
 
 Test if capacity gain outweighs step time cost.
 
-### Priority 4: QKV LoRA rank 4 on 6-layer
+### Priority 5: QKV LoRA rank 4 on 6-layer
 ```bash
 export LORA_SCOPE=qkv
 export LORA_RANK=4
@@ -162,11 +200,11 @@ Cheap quality test.
 
 | Experiment | Speed Risk | Quality Potential | Effort | Priority |
 |------------|-----------|-------------------|--------|----------|
-| Full-model compile | Low | Medium | Low | **1** |
-| RECURRENCE_STEPS=1 | Medium | Medium | Low | **2** |
-| NUM_LAYERS=7 | Medium | High | Low | 3 |
-| QKV LoRA | Low | Low | Low | 4 |
-| Remove bigram/shell | Low | Unknown | Low | 5 |
+| MINI_DEPTH_REFINE_BLOCKS=2 | Low | Medium | Low | **1** |
+| Full-model compile | Low | Medium | Low | **2** |
+| RECURRENT_ATTN_EVERY=2 | Medium | Medium | Low | 3 |
+| NUM_LAYERS=7 | Medium | High | Low | 4 |
+| QKV LoRA | Low | Low | Low | 5 |
 
 ---
 
@@ -179,6 +217,8 @@ Cheap quality test.
 - `run_ten_min_E_and_F.sh` — E + F sequential 10-minute
 - `run_ten_min_clean.sh` — G_clean_aligned (all 6 fixes)
 - `bench_phase11_audit.py` — focused benchmark for bigram + attention output path audit
+- `bench_phase11_train_split.py` — train-loop timing split: data/forward/backward/optimizer
+- `run_ten_min_refine2.sh` — candidate 10-minute run with `MINI_DEPTH_REFINE_BLOCKS=2`
 
 ---
 
