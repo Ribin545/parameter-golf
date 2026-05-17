@@ -21,7 +21,8 @@ export BIGRAM_HASH_ENABLED=0       # disable overhead
 export SHELL_CENTERING_ENABLED=0     # disable overhead
 export MINI_DEPTH_STATIC=1
 export MINI_DEPTH_REFINE_BLOCKS=3
-export ATTN_OUTPUT_MODE=einsum_fused
+# Audit finding: true baseline transpose+linear is ~1.8% faster than einsum_fused
+export ATTN_OUTPUT_MODE=baseline
 export SDPA_BACKEND=flash
 export MULTILAYER_ACTIVATION_CHECKPOINT=0
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off

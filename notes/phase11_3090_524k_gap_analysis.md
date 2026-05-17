@@ -15,6 +15,7 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 | E_6layer_aggrLR (6L) | 6 | none | 306 | ~1.88s | 1.7078 | 1.7092 | +0.103 |
 | F_6layer_ckpt (6L) | 6 | encoder_only ckpt | 252 | ~2.35s | 1.7555 | 1.7553 | +0.151 |
 | **G_clean_aligned (6L)** | 6 | ALL 6 FIXES | 305 | ~1.88s | **1.6154** | 1.6163 | **+0.011** |
+| **H_audit_fixed_clean (6L)** | 6 | G + bigram wiring + true baseline proj | **316** | ~1.84s | **1.6156** | 1.6160 | **+0.011** |
 
 ## Key Findings
 
@@ -35,6 +36,33 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 
 **Total: +0.040 improvement** from config fixes alone.
 
+### 2b. Step-time audit found 2 real implementation bugs
+
+#### Bug 1: `BIGRAM_HASH_ENABLED=0` was not wired in `GPTMultiLayer`
+- `train_gpt.py` logged `BIGRAM_HASH=0`, but `model_multilayer.py` still always created and applied `self.bigram_hash(input_ids)`.
+- This silently added an embedding lookup + add every forward and ~2.1M parameters.
+- Fixed by making `self.bigram_hash = None` when disabled.
+
+#### Bug 2: `ATTN_OUTPUT_MODE=baseline` still used the einsum path
+- The selector checked `if mode in {"einsum_fused", "baseline"}` so both modes used `torch.einsum`.
+- This made previous baseline/einsum A/B tests invalid.
+- Fixed so only `ATTN_OUTPUT_MODE=einsum_fused` uses einsum; `baseline` now uses transpose+linear.
+
+Focused microbench (`bench_phase11_audit.py`, 6L clean, 102400-token microbatch):
+
+| Variant | Median step | Delta | Params |
+|---------|-------------|-------|--------|
+| clean baseline projection, no bigram | **353.88 ms** | — | 11.70M |
+| clean einsum, no bigram | 360.26 ms | +1.80% | 11.70M |
+| old einsum + bigram | 361.84 ms | +2.25% | 13.79M |
+
+Real 10-minute run after audit fixes:
+- Steps improved **305 → 316**.
+- Steady-state step time improved from ~1.88s to ~1.84s.
+- FP val_bpb stayed flat: **1.6154 → 1.6156**.
+
+Conclusion: this audit recovered **~3.6% more optimizer steps** with no meaningful quality regression.
+
 ### 3. Aggressive LR is a trap for 6 layers
 - 6-layer standard LR (D): 1.6558
 - 6-layer aggressive LR (E): 1.7078 — **worse!**
@@ -47,10 +75,10 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 
 ### 5. Step time is still the fundamental constraint
 - Simple transformer: 1.67s/step — lean, single pass
-- Multilayer 6L: 1.88s/step — recurrence + skip overhead
+- Multilayer 6L audit-fixed: 1.84s/step — recurrence + skip overhead
 - Multilayer 6L + ckpt: 2.35s/step — checkpointing adds more overhead
 
-**305 steps vs 361 = 56 fewer optimizer updates** — that's the remaining gap.
+**316 steps vs 361 = 45 fewer optimizer updates** — that's the remaining gap.
 
 ### 6. Training loss progression (step 200, actual = logged/5)
 - Baseline: **2.87**
@@ -60,7 +88,7 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 With correct grad scaling + no dropout + hard CE, per-step convergence is now **on par with baseline**.
 
 ### 7. Scaling insight
-- **3090** (our best): 1.6154 vs baseline 1.6044 = **+0.011 gap**
+- **3090** (our best): 1.6156 vs baseline 1.6044 = **+0.011 gap**
 - **5090** (our best): 1.4389 vs baseline ~1.45 = **-0.011 AHEAD**
 
 The multilayer architecture is **hardware-scalable**. On 3090 it's slightly behind; on 5090 it's ahead.
@@ -72,7 +100,7 @@ The multilayer architecture is **hardware-scalable**. On 3090 it's slightly behi
 To close this, we need to either:
 
 ### Option A: Reduce step time on 6-layer
-- Currently 1.86s vs baseline 1.67s → need **~10% speedup**
+- Currently 1.84s vs baseline 1.67s → need **~9% speedup**
 - Potential paths:
   1. **Compile full model** with `torch.compile(base_model, dynamic=False, fullgraph=True)` instead of just `forward_logits`
   2. **Reduce recurrence to 1 step** (currently 2 steps)
@@ -150,16 +178,17 @@ Cheap quality test.
 - `run_ten_min_E.sh` — E_6layer_aggrLR 10-minute
 - `run_ten_min_E_and_F.sh` — E + F sequential 10-minute
 - `run_ten_min_clean.sh` — G_clean_aligned (all 6 fixes)
+- `bench_phase11_audit.py` — focused benchmark for bigram + attention output path audit
 
 ---
 
 ## Verdict
 
-**Gap closed from +0.051 to +0.011** through 6 config fixes. The remaining gap is almost entirely **step count** (305 vs 361 steps).
+**Gap closed from +0.051 to +0.011** through config + implementation fixes. The remaining gap is almost entirely **step count** (316 vs 361 steps).
 
-The multilayer architecture now **converges per-step as fast as the baseline** (~2.89 loss at step 200). The only disadvantage is **~12% slower steps** (1.88s vs 1.67s).
+The multilayer architecture now **converges per-step as fast as the baseline** (~2.90 loss at step 200). The only disadvantage is **~10% slower steps** (1.84s vs 1.67s).
 
-To beat the baseline, we need **~10% step time reduction** OR **7 layers with same step time**.
+To beat the baseline, we need **~9% step time reduction** OR **better per-step quality at the same 1.84s step time**.
 
 On 5090, this same architecture already wins by ~0.011 val_bpb. The path forward is:
 1. **Speed optimization** for 3090 (full compile, reduce recurrence)

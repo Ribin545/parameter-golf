@@ -318,7 +318,7 @@ class CausalSelfAttention(nn.Module):
         mode = _get_attn_output_mode()
         # Tier 1.3: layout-preserving einsum path avoids contiguous copy
         # Only used when output-proj LoRA is disabled.
-        if mode in {"einsum_fused", "baseline"} and not self.proj.has_lora:
+        if mode == "einsum_fused" and not self.proj.has_lora:
             weight = self._proj_weight_for(y)
             weight_4d = weight.view(dim, self.num_heads, self.head_dim).permute(1, 2, 0).contiguous()
             # y: [B, H, T, Dh] -> out: [B, T, D]
@@ -469,6 +469,7 @@ class GPTMultiLayer(nn.Module):
         self.logit_softcap = logit_softcap
         self.label_smoothing = float(label_smoothing)
         self.z_loss_lambda = float(z_loss_lambda)
+        self.bigram_hash_enabled = os.environ.get("BIGRAM_HASH_ENABLED", "0") == "1"
         self.shell_centering_enabled = bool(shell_centering_enabled)
         self.shell_centering = (
             ShellCenteringPenalty(model_dim, lam=shell_centering_lam)
@@ -492,7 +493,10 @@ class GPTMultiLayer(nn.Module):
         self.skip_weights = nn.Parameter(torch.ones(self.num_skip_weights, model_dim, dtype=torch.float32))
 
         self.tok_emb = nn.Embedding(vocab_size, model_dim)
-        self.bigram_hash = BigramHashEmbedding(bigram_hash_size, model_dim, bigram_hash_scale, vocab_size)
+        self.bigram_hash = (
+            BigramHashEmbedding(bigram_hash_size, model_dim, bigram_hash_scale, vocab_size)
+            if self.bigram_hash_enabled else None
+        )
 
         self.blocks = nn.ModuleList([
             Block(model_dim, num_heads, num_kv_heads, mlp_mult, rope_base, qk_gain_init,
@@ -649,7 +653,8 @@ class GPTMultiLayer(nn.Module):
         cross-entropy over logits.permute(0, 2, 1).
         """
         x = self.tok_emb(input_ids)
-        x = x + self.bigram_hash(input_ids)
+        if self.bigram_hash is not None:
+            x = x + self.bigram_hash(input_ids)
         if self.shell_centering is not None:
             x = self.shell_centering(x)
         x = F.rms_norm(x, (x.size(-1),))
