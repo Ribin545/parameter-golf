@@ -347,7 +347,7 @@ def main() -> None:
         _dynamo.config.cache_size_limit = 16
     except Exception:
         pass
-    if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1":
+    if os.environ.get("ENABLE_RECURRENT_TRAIN_COMPILE", "0") == "1" or os.environ.get("FULL_MODEL_COMPILE", "0") == "1":
         try:
             # Keep CUDA graphs DISABLED for training — the compiled 12-step
             # unrolled forward shares graph-owned intermediate tensors across
@@ -429,10 +429,10 @@ def main() -> None:
             label_smoothing=args.label_smoothing,
             z_loss_lambda=args.z_loss_lambda,
         ).to(device).bfloat16()
-        # torch.compile the forward pass for speed (compile-safe Rotary precomputes RoPE)
-        # Use 'default' mode: enables Inductor kernel fusion without CUDA graph
-        # caching, which is unsafe across micro-batches with our multi-block U-Net.
-        if os.environ.get("DISABLE_COMPILE") != "1":
+        full_model_compile = os.environ.get("FULL_MODEL_COMPILE", "0") == "1"
+        # Default path: compile only forward_logits.
+        # Optional path: FULL_MODEL_COMPILE=1 compiles the whole module.
+        if os.environ.get("DISABLE_COMPILE") != "1" and not full_model_compile:
             compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
             base_model.forward_logits = torch.compile(base_model.forward_logits, mode=compile_mode)
     elif model_type == "stage_repeat":
@@ -525,6 +525,9 @@ def main() -> None:
         log0("[init] lm_bias initialized from validation unigram log-probs")
 
     model = base_model
+    if model_type == "multilayer" and os.environ.get("FULL_MODEL_COMPILE", "0") == "1" and os.environ.get("DISABLE_COMPILE") != "1":
+        compile_mode = os.environ.get("TORCH_COMPILE_MODE", "default")
+        model = torch.compile(base_model, mode=compile_mode)
     if distributed:
         print("[debug] wrapping in DDP...")
         model = DDP(model, device_ids=[local_rank], broadcast_buffers=False)
@@ -1025,21 +1028,29 @@ def main() -> None:
     # --- Quant eval: compare FP vs INT8 ---
     if args.quant_eval:
         log0(f"[final][quant_eval] running FP vs INT8(dequantized) validation ...")
+        if args.official_eval_mode:
+            final_qeval_max_steps = None
+            final_qeval_stride = args.train_seq_len
+            final_qeval_ttt_lr = 0.0
+        else:
+            final_qeval_max_steps = args.quant_eval_max_steps
+            final_qeval_stride = args.quant_eval_stride
+            final_qeval_ttt_lr = args.ttt_lr
         # Swap in export EMA for FP eval
         fp_eval_swap = _swap_named_parameter_data(base_model, export_ema)
         fp_loss, fp_bpb = eval_val(args, model, rank, world_size, device, grad_accum_steps,
                                    val_tokens, base_bytes_lut, has_leading_space_lut,
                                    is_boundary_token_lut,
-                                   max_steps=args.quant_eval_max_steps,
-                                   stride=args.quant_eval_stride, ttt_lr=args.ttt_lr)
+                                   max_steps=final_qeval_max_steps,
+                                   stride=final_qeval_stride, ttt_lr=final_qeval_ttt_lr)
         # Swap in dequantized INT8 weights
         dq_sd = dequantize_state_dict_int8(int8_sd)
         base_model.load_state_dict(dq_sd, strict=False)
         int8_loss, int8_bpb = eval_val(args, model, rank, world_size, device, grad_accum_steps,
                                        val_tokens, base_bytes_lut, has_leading_space_lut,
                                        is_boundary_token_lut,
-                                       max_steps=args.quant_eval_max_steps,
-                                       stride=args.quant_eval_stride, ttt_lr=args.ttt_lr)
+                                       max_steps=final_qeval_max_steps,
+                                       stride=final_qeval_stride, ttt_lr=final_qeval_ttt_lr)
         delta_loss = int8_loss - fp_loss
         delta_bpb = int8_bpb - fp_bpb
         pct = (delta_bpb / fp_bpb) * 100.0 if fp_bpb > 0 else 0.0

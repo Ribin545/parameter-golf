@@ -17,6 +17,7 @@ Understand why our multilayer U-Net underperforms the simple 9-layer baseline on
 | **G_clean_aligned (6L)** | 6 | ALL 6 FIXES | 305 | ~1.88s | **1.6154** | 1.6163 | **+0.011** |
 | **H_audit_fixed_clean (6L)** | 6 | G + bigram wiring + true baseline proj | **316** | ~1.84s | **1.6156** | 1.6160 | **+0.011** |
 | **I_refine2_clean (6L)** | 6 | H + `MINI_DEPTH_REFINE_BLOCKS=2` | **353** | **~1.64s** | **1.5864** | 1.5871 | **-0.018** |
+| **J_refine2_clean_fair_eval (6L)** | 6 | I + official final eval parity | **352** | **~1.65s** | **1.5763** | 1.5766 | **-0.028** |
 
 ## Key Findings
 
@@ -95,6 +96,46 @@ Conclusions:
 - `MINI_DEPTH_REFINE_BLOCKS=2` is the safest speed lever: ~10% faster while preserving attention on both recurrence steps.
 - `RECURRENT_ATTN_EVERY=2` is much faster (~19%) but higher quality risk because step 1 becomes MLP-only.
 
+### 2d. Final evaluation fairness fix
+
+We compared our evaluation code directly against the Naive Baseline training script at:
+
+`E:\Projects\Proj\golf\records\track_10min_16mb\2026-03-17_NaiveBaseline\train_gpt.py`
+
+Naive Baseline validation does:
+- full validation split
+- non-overlapping chunks (`stride = seq_len`)
+- no TTT
+- full token-count and byte-count accumulation
+- `model.eval()` + `torch.inference_mode()`
+
+Our periodic validation path was already capable of matching this when `OFFICIAL_EVAL_MODE=1`,
+but our final printed `[final][quant_eval]` path was still using partial/sliding settings.
+
+This was fixed in `train_gpt.py` so that when:
+
+```bash
+OFFICIAL_EVAL_MODE=1
+```
+
+the final FP and INT8 validation now also use:
+- `max_steps = None`
+- `stride = train_seq_len`
+- `ttt_lr = 0.0`
+
+So all future final reported `val_bpb` values under official mode are now
+**apples-to-apples with the Naive Baseline evaluation protocol**.
+
+Fair rerun result under this fixed protocol:
+- `J_refine2_clean_fair_eval`
+- **FP val_bpb: 1.576319**
+- **INT8 val_bpb: 1.576630**
+- **352 steps**
+- **~1.65s steady-state dt**
+- **Margin vs baseline: -0.028081 val_bpb**
+
+This is now the fairest and strongest 3090 result in this Phase 11 line.
+
 ### 3. Aggressive LR is a trap for 6 layers
 - 6-layer standard LR (D): 1.6558
 - 6-layer aggressive LR (E): 1.7078 — **worse!**
@@ -126,7 +167,7 @@ We no longer need to fully match baseline steps if quality stays higher per step
 With correct grad scaling + no dropout + hard CE, per-step convergence is now **on par with baseline**.
 
 ### 7. Scaling insight
-- **3090** (new best): **1.5864 vs baseline 1.6044 = -0.018 AHEAD**
+- **3090** (fair final best): **1.5763 vs baseline 1.6044 = -0.028 AHEAD**
 - **5090** (previous best): 1.4389 vs baseline ~1.45 = **-0.011 AHEAD**
 
 The multilayer architecture is now proven on **both** 3090 and 5090.
@@ -135,14 +176,14 @@ The multilayer architecture is now proven on **both** 3090 and 5090.
 
 ## Final winning result
 
-`I_refine2_clean` is the new best-known 3090 configuration in this track.
+`J_refine2_clean_fair_eval` is the fairest best-known 3090 configuration in this track.
 
 ### Winning metrics
-- **FP val_bpb: 1.586353**
-- **INT8 val_bpb: 1.587062**
-- **353 steps in 10 minutes**
-- **Steady-state dt: ~1.64s**
-- **Margin vs baseline: -0.0180 val_bpb**
+- **FP val_bpb: 1.576319**
+- **INT8 val_bpb: 1.576630**
+- **352 steps in 10 minutes**
+- **Steady-state dt: ~1.65s**
+- **Margin vs baseline: -0.028081 val_bpb**
 
 ### Why it wins
 It combines all earlier fixes with one final speed optimization:
@@ -153,6 +194,7 @@ It combines all earlier fixes with one final speed optimization:
 5. True faster attention output path (`ATTN_OUTPUT_MODE=baseline`)
 6. No hot-path EMA snapshots (`EMA_UPDATE_EVERY=0`)
 7. **Static mini-depth trimmed from 3 to 2 refine blocks**
+8. **Final evaluation path matched exactly to Naive Baseline protocol when `OFFICIAL_EVAL_MODE=1`**
 
 This keeps the 6-layer / 2-step recurrence architecture intact while cutting enough work from the refine step to recover nearly all lost step count.
 
@@ -184,12 +226,12 @@ Potential next gains:
 
 ## Recommended Next Experiments
 
-### Priority 1: Lock in `I_refine2_clean` as best-known 3090 config
+### Priority 1: Lock in `J_refine2_clean_fair_eval` as best-known 3090 config
 ```bash
 bash run_ten_min_refine2.sh
 ```
 
-This has already won and should be treated as the new reference.
+This has already won under the fair matched evaluation path and should be treated as the new reference.
 
 ### Priority 2: Full-model compile on 6-layer
 ```bash
@@ -248,6 +290,7 @@ Cheap quality test.
 - `bench_phase11_train_split.py` — train-loop timing split: data/forward/backward/optimizer
 - `run_ten_min_refine2.sh` — candidate 10-minute run with `MINI_DEPTH_REFINE_BLOCKS=2`
 - `best_known_3090.sh` — final best-known winning 3090 configuration
+- `best_known_3090_full_compile.sh` — safe full-model compile experiment launcher
 
 ---
 
@@ -259,15 +302,15 @@ We started at:
 - D_6layer: **1.6558 val_bpb**
 
 We ended at:
-- I_refine2_clean: **1.5864 val_bpb**
+- J_refine2_clean_fair_eval: **1.5763 val_bpb**
 
 That is a total gain of:
-- **0.0694 val_bpb** over the original 6-layer config
-- **0.0180 val_bpb better than the 9-layer baseline**
+- **0.0795 val_bpb** over the original 6-layer config
+- **0.0281 val_bpb better than the 9-layer baseline**
 
 The biggest lessons were:
 1. Most of the early gap was **config mismatch**, not architecture.
 2. Then two **real hot-path bugs** were hiding extra compute.
 3. Finally, **trimming refine-step depth from 3 to 2** provided the exact speedup needed to turn a near-tie into a clear win.
 
-At this point, `I_refine2_clean` should be treated as the best-known 3090 recipe for this project state.
+At this point, `J_refine2_clean_fair_eval` should be treated as the best-known fair 3090 recipe for this project state.

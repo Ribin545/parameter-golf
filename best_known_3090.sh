@@ -4,7 +4,10 @@ cd /mnt/e/Projects/Proj/golf/records/track_non_record_16mb/2026-04-01_EliteUTv22
 source /home/tltp2128/.venvs/pg3090/bin/activate
 
 # Best-known 3090 winning config from Phase 11.
-# Result: fp_val_bpb=1.586353 in 10 minutes on RTX 3090.
+# Uses OFFICIAL_EVAL_MODE=1, so the final printed validation follows the same
+# full-split / no-overlap / no-TTT protocol as the Naive Baseline.
+# Historical result before the fairness-finalized rerun: fp_val_bpb=1.586353.
+# Fairness-finalized rerun result: fp_val_bpb=1.576319 on RTX 3090.
 
 export RUN_ID=best_known_3090_phase11
 export DATA_PATH=/mnt/e/Projects/Proj/golf/data/datasets/fineweb10B_sp1024
