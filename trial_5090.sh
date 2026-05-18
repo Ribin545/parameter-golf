@@ -61,73 +61,34 @@ export RECURRENCE_STEPS=2
 export MULTILAYER_LORA_RANK=8
 
 # =============================================================================
-# Batch: preserve the competition-standard global batch while using a larger
-# 5090 micro-batch. Allow override via second arg in smoke/full modes.
+# Batch: preserve the competition-standard global batch (matches winning J).
 # =============================================================================
-export SAFETY_CLAMP_DISABLE=1
-export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-262144}"
+export MICRO_BATCH_TOKENS="${MB_OVERRIDE:-153600}"
 export TRAIN_BATCH_TOKENS=524288
-export TRAIN_SEQ_LEN=1024
 
 # =============================================================================
-# Optimizer: use the winning 3090 objective/schedule settings as the default
-# portable recipe. These were the settings behind the best fair result.
+# Optimizer: winning 3090 objective/schedule settings (config J).
 # =============================================================================
-export OPTIM_MODE=muon_adam
-export MATRIX_OPTIM=muon
 export MATRIX_LR=0.08
 export SCALAR_LR=0.015
 export LORA_LR=0.015
 export CONTROL_LR=0.015
-export EMBED_LR=0.3
-export HEAD_LR=0.008
-export TIED_EMBED_LR=0.06
-export BETA1=0.9
-export MUON_BACKEND_STEPS=5
-export MUON_MOMENTUM=0.95
-export BETA2=0.95
-
-# =============================================================================
-# Weight decay
-# =============================================================================
-export SCALAR_WEIGHT_DECAY=0.20
-export LORA_WEIGHT_DECAY=0.0
-export CONTROL_WEIGHT_DECAY=0.0
 
 # =============================================================================
 # Gradients
 # =============================================================================
-export DYNAMIC_LR_NORM=0
 export GRAD_CLIP_NORM=1.0
-export TARGET_GRAD_NORM=0.5
-export QK_GAIN_INIT=1.5
 export LOGIT_SOFTCAP=30.0
-export Z_LOSS_LAMBDA=0.0
 
 # True baseline projection path was audited faster than einsum in the winning run.
 export ATTN_OUTPUT_MODE=baseline
-export QK_POST_MODE=baseline
-
-# =============================================================================
-# torch.compile — keep default compile path on. FULL_MODEL_COMPILE can be set
-# later if you want to test it separately, but the default winning recipe keeps
-# the standard compile boundary.
-# =============================================================================
-export DISABLE_COMPILE=0
-export TORCH_COMPILE_MODE=default
 
 # =============================================================================
 # Features: use the winning clean path, not the older 5090 feature-heavy sweep.
 # =============================================================================
 export RECURRENT_ATTN_EVERY=1
 export BIGRAM_HASH_ENABLED=0
-export BIGRAM_HASH_SIZE=4096
-export BIGRAM_HASH_SCALE=0.05
-
 export SHELL_CENTERING_ENABLED=0
-export SHELL_CENTERING_LAM=0.008
-export TIE_EMBEDDINGS=1
-export TIED_EMBED_INIT_STD=0.005
 export MULTILAYER_ACTIVATION_CHECKPOINT=0
 export MULTILAYER_ACTIVATION_CHECKPOINT_MODE=off
 
@@ -155,25 +116,14 @@ export ACCUM_BACKWARD_SCALE=sum
 # =============================================================================
 # Scheduler + stopping
 # =============================================================================
-export SCHEDULE_FREE=0
 export WARMUP_STEPS=120
 export TRAIN_LOG_EVERY=50
 export VAL_LOSS_EVERY=0
 export QUANT_EVAL=1
 export QUANT_EVAL_MAX_STEPS=50
 export QUANT_EVAL_STRIDE=64
-export SAVE_BEST_CHECKPOINT=1
-export SAVE_BEST_INT8=1
-export EXPORT_BEST_CHECKPOINT=1
-export SEQ_LEN_CURRICULUM=0
-export RECURRENCE_CURRICULUM=0
 export OFFICIAL_EVAL_MODE=1
 
-# =============================================================================
-# Data determinism
-# =============================================================================
-export DATA_DETERMINISTIC=1
-export DATA_SEED=3623123517
 export VOCAB_SIZE=1024
 
 # =============================================================================
@@ -190,7 +140,7 @@ run_training() {
     echo "  MODEL_TYPE=$MODEL_TYPE  LAYERS=$NUM_LAYERS  DIM=$MODEL_DIM  STEPS=$RECURRENCE_STEPS"
     echo "  HEADS=$NUM_HEADS  KV_HEADS=$NUM_KV_HEADS  MLP_MULT=$MLP_MULT"
     echo "  BATCH: ${TRAIN_BATCH_TOKENS} tokens/step  (micro=${MICRO_BATCH_TOKENS})"
-    echo "  OPTIM: $OPTIM_MODE  MuonNS=$MUON_BACKEND_STEPS"
+    echo "  OPTIM: muon_adam"
     echo "  CHECKPOINTING: enabled=${MULTILAYER_ACTIVATION_CHECKPOINT:-0} mode=${MULTILAYER_ACTIVATION_CHECKPOINT_MODE:-off}"
     echo "  FEATURES: Bigram=$BIGRAM_HASH_ENABLED  ShellCentering=$SHELL_CENTERING_ENABLED  RefineBlocks=$MINI_DEPTH_REFINE_BLOCKS"
     echo "  Wallclock: ${wallclock}s  |  Max iters: $iters"
